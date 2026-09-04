@@ -1,0 +1,47 @@
+{
+  "name": "@kreiz/core",
+  "version": "0.1.0",
+  "description": "Kreiz — Astro Editorial Core : moteur éditorial générique (contenus, médias, publication, admin privé).",
+  "type": "module",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/cyril-belin/kreiz#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyril-belin/kreiz.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/cyril-belin/kreiz/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./virtual": {
+      "types": "./dist/virtual.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "astro": ">=7 <8"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "astro": "^7.3.1",
+    "typescript": "6.0.3",
+    "vite": "^8.0.13"
+  }
+}

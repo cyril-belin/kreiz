@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Niveau 1 — toujours exécuté, y compris sur les PR de forks sans secrets.
+  quality:
+    name: lint · build · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  # Niveau 2 — intégration Neon (slice 1) et E2E Playwright (slice 10).
+  # Exécuté uniquement quand l'environnement CI autorisé dispose des secrets ;
+  # les PR de forks externes restent couvertes par le niveau 1.
+  integration:
+    name: intégration Neon / E2E (gated)
+    runs-on: ubuntu-latest
+    if: vars.RUN_INTEGRATION == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: echo "Squelette du job gated — le vrai contenu arrive au slice 1 (branche Neon) et au slice 10 (Playwright). Voir docs/cadrage.md §17."

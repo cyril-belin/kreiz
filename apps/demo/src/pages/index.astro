@@ -1,0 +1,30 @@
+---
+import '../styles/global.css';
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kreiz — demo</title>
+  </head>
+  <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+    <main class="mx-auto max-w-2xl px-6 py-24">
+      <p class="text-xs font-medium uppercase tracking-widest text-neutral-400">
+        Slice 0 — spike d'intégration
+      </p>
+      <h1 class="mt-3 text-3xl font-semibold tracking-tight">
+        Kreiz, application de démonstration
+      </h1>
+      <p class="mt-4 leading-relaxed text-neutral-300">
+        Cette application consomme uniquement l'API publique de
+        <code class="rounded bg-neutral-800 px-1.5 py-0.5 text-sm">@kreiz/core</code>.
+        La route ci-dessous est injectée par le Core et lit une configuration fournie
+        par le projet.
+      </p>
+      <a
+        class="mt-8 inline-block rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-200"
+        href="/api/kreiz/spike">/api/kreiz/spike</a>
+    </main>
+  </body>
+</html>
