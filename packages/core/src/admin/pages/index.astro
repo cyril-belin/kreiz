@@ -1,0 +1,145 @@
+---
+export const prerender = false;
+
+import '../styles/admin.css';
+import { ADMIN_HOME_PATH, ADMIN_LOGIN_PATH, ADMIN_LOGOUT_PATH } from '../../http/admin-routes.js';
+import {
+  adminSessionCookieOptions,
+  ADMIN_COOKIE_PATH,
+  ADMIN_SESSION_COOKIE_NAME,
+} from '../../http/cookies.js';
+import { CSRF_FORM_FIELD } from '../../http/csrf.js';
+import { resolveAdminAccess, sessionTokenFromCookies } from '../../http/guards.js';
+import { adminSecurityHeaders } from '../../http/security-headers.js';
+import { getKreizAdminRuntime } from '../../http/server-env.js';
+
+const prod = import.meta.env.PROD;
+for (const [name, value] of Object.entries(adminSecurityHeaders({ prod }))) {
+  Astro.response.headers.set(name, value);
+}
+
+const runtime = getKreizAdminRuntime();
+const sessionToken = sessionTokenFromCookies(Astro.cookies);
+const access = await resolveAdminAccess(runtime.auth, sessionToken);
+
+if (access.kind === 'unauthenticated') {
+  // Aucune session, expirée, révoquée ou admin désactivé : même destination,
+  // cookie éventuellement résiduel nettoyé. Aucun détail n'est exposé.
+  Astro.cookies.delete(ADMIN_SESSION_COOKIE_NAME, { path: ADMIN_COOKIE_PATH });
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+// La session a peut-être été prolongée (glissière) : le cookie suit.
+Astro.cookies.set(
+  ADMIN_SESSION_COOKIE_NAME,
+  sessionToken ?? '',
+  adminSessionCookieOptions({ maxAgeSeconds: access.cookieMaxAgeSeconds, secure: prod }),
+);
+
+const navSections = [
+  {
+    label: null,
+    items: [{ label: 'Dashboard', href: '/admin', current: true, disabled: false }],
+  },
+  {
+    label: 'Contenu',
+    items: [
+      { label: 'Articles', href: null, current: false, disabled: true },
+      { label: 'Guides', href: null, current: false, disabled: true },
+      { label: 'Réalisations', href: null, current: false, disabled: true },
+    ],
+  },
+  {
+    label: 'Commercial',
+    items: [{ label: 'Contacts', href: null, current: false, disabled: true }],
+  },
+  {
+    label: 'Analyse',
+    items: [{ label: 'Analytics', href: null, current: false, disabled: true }],
+  },
+];
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Kreiz — Back-office</title>
+  </head>
+  <body>
+    <div class="kz-shell">
+      <aside class="kz-sidebar">
+        <p class="kz-sidebar__brand">Kreiz <small>Back-office</small></p>
+        <nav class="kz-nav" aria-label="Navigation principale">
+          {
+            navSections.map((section) => (
+              <>
+                {section.label && <p class="kz-nav__section">{section.label}</p>}
+                {section.items.map((item) =>
+                  item.disabled ? (
+                    <span
+                      class="kz-nav__link kz-nav__link--disabled"
+                      aria-disabled="true"
+                      title="Module à venir"
+                    >
+                      {item.label}
+                      <span class="kz-nav__badge">Bientôt</span>
+                    </span>
+                  ) : (
+                    <a
+                      class="kz-nav__link"
+                      href={item.href ?? '#'}
+                      aria-current={item.current ? 'page' : undefined}
+                    >
+                      {item.label}
+                    </a>
+                  ),
+                )}
+              </>
+            ))
+          }
+        </nav>
+      </aside>
+
+      <div class="kz-main">
+        <header class="kz-topbar">
+          <h1 class="kz-topbar__title">Dashboard</h1>
+          <div class="kz-user">
+            <p class="kz-user__meta">
+              <span class="kz-user__name">{access.admin.name}</span><br />
+              <span class="kz-user__email">{access.admin.email}</span>
+            </p>
+            <form method="post" action={ADMIN_LOGOUT_PATH}>
+              <input type="hidden" name={CSRF_FORM_FIELD} value={access.csrfToken} />
+              <button class="kz-button kz-button--ghost" type="submit">Se déconnecter</button>
+            </form>
+          </div>
+        </header>
+
+        <main class="kz-content">
+          <section class="kz-panel" aria-labelledby="kz-welcome-title">
+            <h2 class="kz-panel__title" id="kz-welcome-title">
+              Bienvenue, {access.admin.name}
+            </h2>
+            <p class="kz-panel__text">
+              Vous êtes authentifié·e. Ce shell est la fondation du back-office :
+              les modules éditoriaux (contenus, médias, formulaires, analytics)
+              arrivent dans les prochains slices.
+            </p>
+            <dl>
+              <dt>Session</dt>
+              <dd>
+                active — expiration glissante le{' '}
+                {access.session.expiresAt.toLocaleString('fr-FR')}
+              </dd>
+              <dt>Limite absolue</dt>
+              <dd>{access.session.absoluteExpiresAt.toLocaleDateString('fr-FR')}</dd>
+            </dl>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

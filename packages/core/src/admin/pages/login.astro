@@ -1,0 +1,93 @@
+---
+export const prerender = false;
+
+import '../styles/admin.css';
+import { ADMIN_HOME_PATH, ADMIN_LOGIN_PATH } from '../../http/admin-routes.js';
+import { adminSessionCookieOptions, ADMIN_SESSION_COOKIE_NAME } from '../../http/cookies.js';
+import { processLoginSubmission } from '../../http/admin-login.js';
+import { resolveAdminAccess, sessionTokenFromCookies } from '../../http/guards.js';
+import { adminSecurityHeaders } from '../../http/security-headers.js';
+import { getKreizAdminRuntime } from '../../http/server-env.js';
+
+const prod = import.meta.env.PROD;
+for (const [name, value] of Object.entries(adminSecurityHeaders({ prod }))) {
+  Astro.response.headers.set(name, value);
+}
+
+const runtime = getKreizAdminRuntime();
+
+let email = '';
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const result = await processLoginSubmission(runtime.auth, Astro.request);
+  if (result.kind === 'success') {
+    Astro.cookies.set(
+      ADMIN_SESSION_COOKIE_NAME,
+      result.sessionToken,
+      adminSessionCookieOptions({ maxAgeSeconds: result.cookieMaxAgeSeconds, secure: prod }),
+    );
+    return Astro.redirect(ADMIN_HOME_PATH, 303);
+  }
+  email = result.view.email;
+  error = result.view.error;
+  Astro.response.status = result.status;
+} else {
+  // Déjà authentifié : /admin/login redirige proprement vers /admin.
+  const access = await resolveAdminAccess(
+    runtime.auth,
+    sessionTokenFromCookies(Astro.cookies),
+  );
+  if (access.kind === 'authenticated') {
+    return Astro.redirect(ADMIN_HOME_PATH, 302);
+  }
+}
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Connexion — Kreiz</title>
+  </head>
+  <body>
+    <main class="kz-login">
+      <section class="kz-login__card" aria-labelledby="kz-login-title">
+        <h1 class="kz-login__brand" id="kz-login-title">Kreiz</h1>
+        <p class="kz-login__subtitle">Connexion au back-office</p>
+
+        {error && <p class="kz-alert" role="alert">{error}</p>}
+
+        <form method="post" action={ADMIN_LOGIN_PATH} novalidate>
+          <div class="kz-field">
+            <label class="kz-label" for="kz-email">Email</label>
+            <input
+              class="kz-input"
+              type="email"
+              id="kz-email"
+              name="email"
+              value={email}
+              autocomplete="username"
+              autofocus
+              required
+            />
+          </div>
+          <div class="kz-field">
+            <label class="kz-label" for="kz-password">Mot de passe</label>
+            <input
+              class="kz-input"
+              type="password"
+              id="kz-password"
+              name="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button class="kz-button" type="submit">Se connecter</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

@@ -47,6 +47,15 @@ export {
   type AdminUsersRepository,
 } from './repositories/admin-users.js';
 export {
+  createAdminSessionsRepository,
+  type AdminSessionsRepository,
+} from './repositories/admin-sessions.js';
+export {
+  createAdminAuditLogRepository,
+  type AdminAuditLogRepository,
+} from './repositories/admin-audit-log.js';
+export { createRateLimitsRepository, type RateLimitsRepository } from './repositories/rate-limits.js';
+export {
   createContentEntriesRepository,
   type ContentEntriesRepository,
 } from './repositories/content-entries.js';

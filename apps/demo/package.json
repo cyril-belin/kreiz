@@ -10,15 +10,17 @@
     "directory": "apps/demo"
   },
   "scripts": {
-    "dev": "astro dev",
+    "dev": "node --env-file-if-exists=.env ./node_modules/astro/bin/astro.mjs dev",
     "build": "astro build",
     "typecheck": "astro check",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.ts"
+    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.10",
     "@kreiz/core": "workspace:*",
+    "@node-rs/argon2": "^2.2.0",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.1",
     "drizzle-orm": "^0.45.2",
@@ -26,8 +28,11 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",
+    "pg": "^8.23.0",
     "typescript": "6.0.3"
   }
 }

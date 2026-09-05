@@ -1,0 +1,337 @@
+/*
+ * Kreiz admin — styles partagés du back-office (login + shell).
+ *
+ * Outil interne : sobre, dense mais lisible, accessible (focus visible,
+ * contrastes AA), responsive sans overflow horizontal. Pas de
+ * glassmorphism, pas de gradients décoratifs, pas d'animations.
+ * Ce CSS est autonome — le shell n'exige ni Tailwind ni configuration
+ * CSS du projet consommateur.
+ */
+
+:root {
+  --kz-bg: #f5f6f8;
+  --kz-surface: #ffffff;
+  --kz-border: #d8dce1;
+  --kz-text: #1c2430;
+  --kz-text-muted: #5b6673;
+  --kz-accent: #1f4fd8;
+  --kz-accent-hover: #1a44ba;
+  --kz-accent-soft: #e9effc;
+  --kz-danger-bg: #fdeeee;
+  --kz-danger-border: #e5b9b9;
+  --kz-danger-text: #8e2626;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--kz-text);
+  background: var(--kz-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--kz-accent);
+  outline-offset: 2px;
+}
+
+/* ——— Login ——— */
+
+.kz-login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.kz-login__card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--kz-surface);
+  border: 1px solid var(--kz-border);
+  border-radius: 8px;
+  padding: 28px;
+}
+
+.kz-login__brand {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.kz-login__subtitle {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--kz-text-muted);
+}
+
+.kz-field {
+  margin-bottom: 16px;
+}
+
+.kz-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.kz-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--kz-border);
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  background: var(--kz-surface);
+}
+
+.kz-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--kz-accent);
+  cursor: pointer;
+}
+
+.kz-button:hover {
+  background: var(--kz-accent-hover);
+}
+
+.kz-button--ghost {
+  color: var(--kz-text);
+  background: transparent;
+  border-color: var(--kz-border);
+}
+
+.kz-button--ghost:hover {
+  background: var(--kz-bg);
+}
+
+.kz-alert {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--kz-danger-border);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--kz-danger-text);
+  background: var(--kz-danger-bg);
+}
+
+/* ——— Shell ——— */
+
+.kz-shell {
+  min-height: 100dvh;
+  display: flex;
+}
+
+.kz-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 220px;
+  background: var(--kz-surface);
+  border-right: 1px solid var(--kz-border);
+}
+
+.kz-sidebar__brand {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--kz-border);
+  font-weight: 650;
+}
+
+.kz-sidebar__brand small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--kz-text-muted);
+}
+
+.kz-nav {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.kz-nav__section {
+  margin: 14px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kz-text-muted);
+}
+
+.kz-nav__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--kz-text);
+  text-decoration: none;
+}
+
+.kz-nav__link:hover {
+  background: var(--kz-bg);
+}
+
+.kz-nav__link[aria-current='page'] {
+  background: var(--kz-accent-soft);
+  color: var(--kz-accent);
+  font-weight: 600;
+}
+
+.kz-nav__link--disabled {
+  color: var(--kz-text-muted);
+  cursor: not-allowed;
+}
+
+.kz-nav__link--disabled:hover {
+  background: transparent;
+}
+
+.kz-nav__badge {
+  padding: 1px 7px;
+  border: 1px solid var(--kz-border);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--kz-text-muted);
+}
+
+.kz-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.kz-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--kz-surface);
+  border-bottom: 1px solid var(--kz-border);
+}
+
+.kz-topbar__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.kz-user {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.kz-user__meta {
+  line-height: 1.25;
+  text-align: right;
+}
+
+.kz-user__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kz-user__email {
+  font-size: 12px;
+  color: var(--kz-text-muted);
+}
+
+.kz-content {
+  width: 100%;
+  max-width: 960px;
+  padding: 24px;
+}
+
+.kz-panel {
+  padding: 20px;
+  background: var(--kz-surface);
+  border: 1px solid var(--kz-border);
+  border-radius: 8px;
+}
+
+.kz-panel__title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.kz-panel__text {
+  margin: 0 0 12px;
+  color: var(--kz-text-muted);
+}
+
+.kz-panel dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 16px 0 0;
+  font-size: 14px;
+}
+
+.kz-panel dt {
+  color: var(--kz-text-muted);
+}
+
+.kz-panel dd {
+  margin: 0;
+}
+
+/* ——— Responsive (1440 → 1024 → 768 → 390) ——— */
+
+@media (max-width: 1024px) {
+  .kz-sidebar {
+    width: 190px;
+  }
+}
+
+@media (max-width: 768px) {
+  .kz-shell {
+    flex-direction: column;
+  }
+
+  .kz-sidebar {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--kz-border);
+  }
+
+  .kz-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    padding: 8px 10px;
+  }
+
+  .kz-nav__section {
+    width: 100%;
+    margin: 8px 8px 2px;
+  }
+
+  .kz-user__meta {
+    display: none;
+  }
+
+  .kz-content {
+    padding: 16px;
+  }
+}

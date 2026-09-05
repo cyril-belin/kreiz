@@ -29,11 +29,14 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "kreiz": "./dist/cli/kreiz.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node ./scripts/copy-admin-assets.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
@@ -41,6 +44,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@node-rs/argon2": "^2.2.0",
     "drizzle-orm": "^0.45.2",
     "zod": "^4.5.4"
   },

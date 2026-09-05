@@ -23,9 +23,10 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  # Niveau 2 — intégration Neon (slice 1) puis E2E Playwright (slice 10).
+  # Niveau 2 — intégration Neon + E2E back-office (slice 2).
   # Branche Neon éphémère par run : créer → migrer (chaîne apps/demo) →
-  # tester → supprimer, même en cas d'échec des tests.
+  # tester (intégration + E2E Playwright sur serveur dev SSR) → supprimer,
+  # même en cas d'échec des tests.
   #
   # Ouvert uniquement quand la variable de dépôt RUN_INTEGRATION = 'true'
   # ET que les secrets Neon sont disponibles (repo d'origine). Une PR de
@@ -33,7 +34,7 @@ jobs:
   # notice, la couverture reste assurée par le job `quality`. Les secrets
   # ne sont jamais réduits ni exposés aux forks.
   integration:
-    name: intégration Neon (branche éphémère)
+    name: intégration Neon + E2E (branche éphémère)
     runs-on: ubuntu-latest
     if: vars.RUN_INTEGRATION == 'true'
     steps:
@@ -112,6 +113,20 @@ jobs:
         env:
           KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
         run: pnpm test:integration
+
+      - name: Secret de déploiement éphémère pour l'E2E (rate limiting login)
+        if: steps.neon-branch.outputs.url != ''
+        run: echo "KREIZ_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - name: Installer le navigateur Playwright
+        if: steps.neon-branch.outputs.url != ''
+        run: pnpm --filter @kreiz/demo exec playwright install --with-deps chromium
+
+      - name: E2E back-office (serveur dev SSR + branche Neon)
+        if: steps.neon-branch.outputs.url != ''
+        env:
+          KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
+        run: pnpm test:e2e
 
       - name: Supprimer la branche Neon éphémère
         if: always() && steps.neon-branch.outputs.branch_id != ''
