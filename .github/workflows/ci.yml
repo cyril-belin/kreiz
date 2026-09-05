@@ -101,7 +101,11 @@ jobs:
         if: steps.neon-branch.outputs.url != ''
         env:
           KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
-        run: pnpm --filter @kreiz/demo db:migrate
+        run: |
+          # Le schéma demo importe @kreiz/core/data (dist/) : le core doit être
+          # buildé avant le migrateur. Les tests, eux, importent la source.
+          pnpm --filter @kreiz/core build
+          pnpm --filter @kreiz/demo db:migrate
 
       - name: Tests d'intégration Neon
         if: steps.neon-branch.outputs.url != ''
