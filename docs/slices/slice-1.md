@@ -240,15 +240,26 @@ Variables/secret GitHub requis : secret `NEON_API_KEY`, variable
   redirects/analytics) ; NOT NULL essentiels ; write→read typé via les
   repositories publics.
 
-### Job CI Neon (pas encore exécutable avant commit/push)
+### Job CI Neon — validé en conditions réelles
 
-Le cycle `créer branche éphémère → migrer → tester → supprimer` est en place
-dans le workflow mais nécessite le commit/push du slice (le fichier de
-workflow doit être sur `main` pour être déclenchable) et les secrets GitHub :
-secret `NEON_API_KEY`, variables `NEON_PROJECT_ID` et `RUN_INTEGRATION=true`.
-Le parsing de la sortie `neonctl branches create --output json` a été vérifié
-contre la source de neonctl 4.14.1 (`connection_uris[0].connection_uri`) et
-corrigé en conséquence avant tout run.
+Le cycle complet tourne en vert sur GitHub Actions (workflow `CI`, job
+`integration`, à partir du commit `98213e8`) : création de la branche
+éphémère (`kreiz-ci-<run_id>-<attempt>`), récupération et masquage de
+l'URI (`KREIZ_DATABASE_URL: ***`, `NEON_API_KEY: ***` dans les logs,
+aucune URL en clair), build du core puis migration de `apps/demo` via le
+driver HTTP Neon, 25/25 tests d'intégration, suppression de la branche.
+La suppression s'exécute aussi en cas d'échec (`if: always()` — observé
+sur un run ayant échoué avant correction : branche supprimée, job rouge,
+`quality` non impacté).
+
+Configuration requise : secret `NEON_API_KEY`, variables `NEON_PROJECT_ID`
+et `RUN_INTEGRATION=true` (posées via l'intégration GitHub de Neon +
+variable manuelle). Politique forks inchangée : sans secrets, le job se
+termine en succès avec une notice et la couverture reste assurée par le
+job `quality` (comportement observé sur run réel avant pose des secrets).
+Correctif au passage du premier run : le core doit être buildé avant le
+migrateur (le schéma demo importe `@kreiz/core/data` en `dist/`) — étape
+ajoutée au job.
 
 ## Décisions et écarts au cadrage
 
