@@ -23,11 +23,17 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  # Niveau 2 — intégration Neon (slice 1) et E2E Playwright (slice 10).
-  # Exécuté uniquement quand l'environnement CI autorisé dispose des secrets ;
-  # les PR de forks externes restent couvertes par le niveau 1.
+  # Niveau 2 — intégration Neon (slice 1) puis E2E Playwright (slice 10).
+  # Branche Neon éphémère par run : créer → migrer (chaîne apps/demo) →
+  # tester → supprimer, même en cas d'échec des tests.
+  #
+  # Ouvert uniquement quand la variable de dépôt RUN_INTEGRATION = 'true'
+  # ET que les secrets Neon sont disponibles (repo d'origine). Une PR de
+  # fork n'a pas accès aux secrets : le job se termine en succès avec une
+  # notice, la couverture reste assurée par le job `quality`. Les secrets
+  # ne sont jamais réduits ni exposés aux forks.
   integration:
-    name: intégration Neon / E2E (gated)
+    name: intégration Neon (branche éphémère)
     runs-on: ubuntu-latest
     if: vars.RUN_INTEGRATION == 'true'
     steps:
@@ -38,4 +44,76 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: echo "Squelette du job gated — le vrai contenu arrive au slice 1 (branche Neon) et au slice 10 (Playwright). Voir docs/cadrage.md §17."
+
+      - name: Vérifier la disponibilité des accès Neon
+        id: neon-access
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          if [ -z "$NEON_API_KEY" ] || [ -z "$NEON_PROJECT_ID" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secrets Neon indisponibles (PR de fork ?) — job d'intégration sauté. lint/build/typecheck/unit restent couverts par le job quality."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Créer la branche Neon éphémère du run
+        id: neon-branch
+        if: steps.neon-access.outputs.available == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_NAME: kreiz-ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          OUTPUT=$(npx --yes neonctl@latest branches create \
+            --project-id "$NEON_PROJECT_ID" \
+            --name "$BRANCH_NAME" \
+            --output json)
+          URL=$(printf '%s' "$OUTPUT" | node -e '
+            let data = "";
+            process.stdin.on("data", (chunk) => (data += chunk));
+            process.stdin.on("end", () => {
+              const json = JSON.parse(data);
+              const url =
+                json.connection_uris?.[0]?.connection_uri ??
+                json.connection_uri;
+              if (!url) {
+                console.error("Création de branche sans URL de connexion :", JSON.stringify(json));
+                process.exit(1);
+              }
+              process.stdout.write(url);
+            });
+          ')
+          BRANCH_ID=$(printf '%s' "$OUTPUT" | node -e '
+            let data = "";
+            process.stdin.on("data", (chunk) => (data += chunk));
+            process.stdin.on("end", () => {
+              const json = JSON.parse(data);
+              process.stdout.write(json.branch?.id ?? json.id ?? "");
+            });
+          ')
+          echo "::add-mask::$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "branch_id=$BRANCH_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Appliquer les migrations de apps/demo
+        if: steps.neon-branch.outputs.url != ''
+        env:
+          KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
+        run: pnpm --filter @kreiz/demo db:migrate
+
+      - name: Tests d'intégration Neon
+        if: steps.neon-branch.outputs.url != ''
+        env:
+          KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
+        run: pnpm test:integration
+
+      - name: Supprimer la branche Neon éphémère
+        if: always() && steps.neon-branch.outputs.branch_id != ''
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          npx --yes neonctl@latest branches delete "${{ steps.neon-branch.outputs.branch_id }}" \
+            --project-id "$NEON_PROJECT_ID"

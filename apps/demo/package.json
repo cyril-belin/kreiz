@@ -12,17 +12,22 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.ts"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.10",
     "@kreiz/core": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.1",
+    "drizzle-orm": "^0.45.2",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/node": "^24.13.3",
+    "drizzle-kit": "^0.31.10",
     "typescript": "6.0.3"
   }
 }

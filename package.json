@@ -16,7 +16,10 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run packages/core/tests/integration",
+    "db:generate": "pnpm --filter @kreiz/demo db:generate",
+    "db:migrate": "pnpm --filter @kreiz/demo db:migrate"
   },
   "devDependencies": {
     "eslint": "^10.10.0",

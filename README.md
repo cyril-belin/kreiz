@@ -12,7 +12,9 @@ engine; each project provides branding, content types, templates and wording.
 
 **Early development / pre-release.** Kreiz is not ready for general production use yet.
 The repository currently contains the slice 0 foundation (monorepo, tooling, CI and the
-Astro integration spike). Features listed in the roadmap below are planned, not shipped.
+Astro integration spike) and the slice 1 data foundations (Neon/Drizzle schema owned by
+the consuming app, server connection layer, first domain repositories). Features listed
+in the roadmap below are planned, not shipped.
 
 ## Current architecture
 
@@ -46,10 +48,20 @@ pnpm install        # install
 pnpm build          # build core, then demo (topological order)
 pnpm typecheck      # tsc (core) + astro check (demo)
 pnpm lint           # eslint
-pnpm test           # vitest (unit)
+pnpm test           # vitest (unit; integration tests skip without a database)
 ```
 
-Baseline: Node 24 LTS · Astro 7 · Tailwind 4 · Neon PostgreSQL + Drizzle (roadmap).
+Database (migrations live in `apps/demo` — the app owns them, not the core):
+
+```sh
+cp apps/demo/.env.example apps/demo/.env   # then set KREIZ_DATABASE_URL (Neon branch)
+pnpm db:generate                           # drizzle-kit generate from the composed schema
+pnpm db:migrate                            # apply apps/demo migrations (Neon HTTP driver)
+pnpm test:integration                      # against $KREIZ_DATABASE_URL (Neon) or
+                                           # $KREIZ_TEST_DATABASE_URL (any real PostgreSQL)
+```
+
+Baseline: Node 24 LTS · Astro 7 · Tailwind 4 · Neon PostgreSQL + Drizzle.
 Exact versions are locked in `pnpm-lock.yaml`.
 
 ## License

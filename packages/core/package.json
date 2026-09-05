@@ -18,6 +18,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./data": {
+      "types": "./dist/data/index.d.ts",
+      "default": "./dist/data/index.js"
+    },
     "./virtual": {
       "types": "./dist/virtual.d.ts"
     },
@@ -36,11 +40,15 @@
     "astro": ">=7 <8"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2",
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
     "astro": "^7.3.1",
+    "pg": "^8.23.0",
     "typescript": "6.0.3",
     "vite": "^8.0.13"
   }
