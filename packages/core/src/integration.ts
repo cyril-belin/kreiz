@@ -1,16 +1,22 @@
 import { fileURLToPath } from 'node:url';
 import type { AstroIntegration } from 'astro';
 import { normalizeKreizConfig, type KreizConfig } from './config.js';
+import { collectPublicRedirectsConfig } from './content/redirect-materialization.js';
+import type { AstroRedirectConfig } from './domain/content/redirect-engine.js';
+import { createKreizDatabase } from './data/connection.js';
 import {
   ADMIN_CONTENT_DELETE_PATTERN,
   ADMIN_CONTENT_EDIT_PATTERN,
   ADMIN_CONTENT_INDEX_PATH,
   ADMIN_CONTENT_NEW_PATTERN,
+  ADMIN_CONTENT_PUBLISH_PATTERN,
   ADMIN_CONTENT_TYPE_PATTERN,
+  ADMIN_CONTENT_UNPUBLISH_PATTERN,
   ADMIN_HOME_PATH,
   ADMIN_LOGIN_PATH,
   ADMIN_LOGOUT_PATH,
   ADMIN_PREVIEW_PATTERN,
+  ADMIN_REBUILD_PATH,
 } from './http/admin-routes.js';
 import { validateDeclarationCrossConstraints } from './domain/content/registry.js';
 import {
@@ -32,6 +38,13 @@ import {
  * `tests/admin-routes.test.ts`). Le projet n'écrit aucune plomberie :
  * il déclare ses types de contenu (mission §3) et ses templates (§21).
  *
+ * Redirections de publication (slice 4) : quand `KREIZ_DATABASE_URL` est
+ * présent au build, les redirections 301 issues de `kreiz_redirects` (cibles
+ * vivantes uniquement) sont injectées dans la **config native Astro**
+ * (`redirects`) — matérialisées en `config.json` par l'adapter de
+ * déploiement (Vercel), jamais en SSR. Sans base (PR de fork), aucune
+ * redirection n'est injectée et rien n'échoue.
+ *
  * La route de spike publique du slice 0 a été supprimée au slice 3 : les
  * routes contenu/preview consomment désormais réellement le module virtuel
  * en production (registre de types, nav admin, preview), prouvant les
@@ -49,9 +62,24 @@ export function kreiz(input?: KreizConfig): AstroIntegration {
   return {
     name: '@kreiz/core',
     hooks: {
-      'astro:config:setup': ({ injectRoute, updateConfig, config: astroConfig }) => {
+      'astro:config:setup': async ({ injectRoute, updateConfig, config: astroConfig }) => {
         const projectRoot = fileURLToPath(astroConfig.root);
+
+        // Redirections de publication — build-time uniquement, avant toute
+        // autre configuration. Une base injoignable échoue explicitement
+        // (le build public échouerait de toute façon sur le lecteur de
+        // contenu) : on n'expédie jamais un build silencieusement privé de
+        // ses redirections.
+        let publicRedirects: AstroRedirectConfig = {};
+        const databaseUrl = process.env.KREIZ_DATABASE_URL;
+        if (databaseUrl) {
+          publicRedirects = await collectPublicRedirectsConfig(
+            createKreizDatabase({ databaseUrl }),
+          );
+        }
+
         updateConfig({
+          ...(Object.keys(publicRedirects).length > 0 ? { redirects: publicRedirects } : {}),
           vite: {
             plugins: [
               kreizConfigVirtualModule(config, {
@@ -123,6 +151,25 @@ export function kreiz(input?: KreizConfig): AstroIntegration {
         injectRoute({
           pattern: ADMIN_CONTENT_DELETE_PATTERN,
           entrypoint: fileURLToPath(new URL('./admin/routes/content-delete.js', import.meta.url)),
+          prerender: false,
+        });
+        // Publication / dépublication / rebuild manuel (slice 4) — mutations
+        // POST sous le même invariant /admin.
+        injectRoute({
+          pattern: ADMIN_CONTENT_PUBLISH_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/content-publish.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_CONTENT_UNPUBLISH_PATTERN,
+          entrypoint: fileURLToPath(
+            new URL('./admin/routes/content-unpublish.js', import.meta.url),
+          ),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_REBUILD_PATH,
+          entrypoint: fileURLToPath(new URL('./admin/routes/site-rebuild.js', import.meta.url)),
           prerender: false,
         });
         injectRoute({

@@ -34,6 +34,19 @@ export type KreizContentSeo = {
  * `data` est validé par le schéma Zod du type de contenu déclaré en code
  * (cadrage §8), pas au niveau SQL. Suppression = soft delete (`deleted_at`).
  *
+ * **Deux projections sur la même ligne** (mission §5, §20 — sémantique
+ * « Save != Publish ») :
+ * - état éditorial **courant** : `title`, `slug`, `data`, `seo` — modifiés
+ *   par chaque Save, jamais rendus au public directement ;
+ * - **dernier état effectivement public** : `published_slug`, `published_title`,
+ *   `published_data`, `published_seo`, `published_at` — figés par Publish,
+ *   seuls lus par le build public. Un Save sur un contenu publié ne change
+ *   donc jamais la sortie publique, même au prochain rebuild déclenché par
+ *   un autre contenu. `null` = jamais publié (Publish est l'unique
+ *   écrivain ; une ligne `published` sans snapshot est une corruption).
+ *   `published_at` reste la date de **première** publication (mission §6) ;
+ *   les snapshots de slug/title/data/seo sont écrasés à chaque publication.
+ *
  * Contrainte structurante : unicité `(route_namespace, slug)` **partielle**
  * (`WHERE deleted_at IS NULL`) — un slug réapparaît disponible après soft
  * delete, sans jamais entrer en collision avec un contenu actif.
@@ -52,6 +65,10 @@ export const contentEntries = pgTable(
     coverMediaId: uuid('cover_media_id').references(() => media.id, { onDelete: 'restrict' }),
     status: text('status').$type<KreizContentStatus>().notNull().default('draft'),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    publishedSlug: text('published_slug'),
+    publishedTitle: text('published_title'),
+    publishedData: jsonb('published_data').$type<Record<string, unknown>>(),
+    publishedSeo: jsonb('published_seo').$type<KreizContentSeo>(),
     seo: jsonb('seo').$type<KreizContentSeo>().notNull().default({}),
     data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
     createdBy: uuid('created_by')

@@ -2,7 +2,8 @@
 export const prerender = false;
 
 import AdminShell from '../components/AdminShell.astro';
-import { ADMIN_LOGIN_PATH } from '../../http/admin-routes.js';
+import { ADMIN_LOGIN_PATH, ADMIN_REBUILD_PATH } from '../../http/admin-routes.js';
+import { CSRF_FORM_FIELD } from '../../http/csrf.js';
 import { authenticateContentPage } from '../lib/content-page.js';
 
 // Guard + en-têtes de sécurité + rafraîchissement du cookie — socle commun
@@ -11,6 +12,11 @@ const access = await authenticateContentPage(Astro);
 if (access.kind === 'unauthenticated') {
   return Astro.redirect(ADMIN_LOGIN_PATH, 302);
 }
+
+// Reconstruction du site (slice 4) : état du moteur configuré + action
+// manuelle. Absence d'adapter = état normal signalé, jamais une erreur.
+const rebuildProvider = access.runtime.rebuildProvider;
+const rebuildBanner = Astro.url.searchParams.get('rebuild');
 ---
 
 <AdminShell
@@ -19,6 +25,17 @@ if (access.kind === 'unauthenticated') {
   csrfToken={access.access.csrfToken}
   currentPath={Astro.url.pathname}
 >
+  {rebuildBanner && (
+    <div
+      class:list={['kz-banner', rebuildBanner === 'ok' ? 'kz-banner--success' : 'kz-banner--warning']}
+      role="status"
+    >
+      {rebuildBanner === 'ok' && 'Reconstruction du site demandée — la nouvelle version sera en ligne dès la fin du build.'}
+      {rebuildBanner === 'failed' && "La reconstruction a échoué : le dernier site valide reste en ligne. Vous pouvez réessayer."}
+      {rebuildBanner === 'unconfigured' && 'Aucun moteur de rebuild n’est configuré : la demande n’a rien déclenché.'}
+    </div>
+  )}
+
   <section class="kz-panel" aria-labelledby="kz-welcome-title">
     <h2 class="kz-panel__title" id="kz-welcome-title">
       Bienvenue, {access.access.admin.name}
@@ -37,5 +54,34 @@ if (access.kind === 'unauthenticated') {
       <dt>Limite absolue</dt>
       <dd>{access.access.session.absoluteExpiresAt.toLocaleDateString('fr-FR')}</dd>
     </dl>
+  </section>
+
+  <section class="kz-panel" aria-labelledby="kz-site-title">
+    <h2 class="kz-panel__title" id="kz-site-title">Site public</h2>
+    <p class="kz-panel__text">
+      Le site public est statique : il ne change qu'à chaque reconstruction.
+      Les publications et dépublications la demandent automatiquement
+      {rebuildProvider ? 'via le deploy hook configuré.' : ' — aucun moteur n’est actuellement configuré.'}
+    </p>
+    <dl>
+      <dt>Reconstruction</dt>
+      <dd>
+        {rebuildProvider === 'vercel-deploy-hook'
+          ? 'automatique (deploy hook Vercel)'
+          : 'non configurée — les publications restent en base sans mettre le site à jour'}
+      </dd>
+      <dt>Dernier site valide</dt>
+      <dd>
+        reste servi tant qu'un nouveau build n'a pas réussi — un échec de
+        reconstruction n'endommage jamais le site en ligne.
+      </dd>
+    </dl>
+    {rebuildProvider && (
+      <form method="post" action={ADMIN_REBUILD_PATH}>
+        <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+        <input type="hidden" name="return_to" value="/admin" />
+        <button class="kz-button" type="submit">Reconstruire le site</button>
+      </form>
+    )}
   </section>
 </AdminShell>

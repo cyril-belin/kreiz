@@ -17,6 +17,7 @@ import {
   withTransientNetworkRetry,
   type IntegrationHarness,
 } from './helpers';
+import { createRebuildTriggerStub } from '../helpers/stub-rebuild-trigger';
 
 /**
  * Moteur de contenu contre PostgreSQL réel (mission §34) : le service est
@@ -73,6 +74,7 @@ describeIntegration('moteur de contenu — service + PostgreSQL réel', () => {
       entries: entriesRepo,
       audit: createAdminAuditLogRepository(harness.db),
       registry,
+      rebuild: createRebuildTriggerStub(),
     });
     admin = await withTransientNetworkRetry(() =>
       users.create({
@@ -225,7 +227,12 @@ describeIntegration('moteur de contenu — service + PostgreSQL réel', () => {
     const guideId = created.entry.id;
 
     const deleted = await service.deleteDraft({ entryId: guideId, actorAdminId: secondAdmin.id });
-    expect(deleted).toEqual({ kind: 'deleted', entryId: guideId });
+    expect(deleted).toEqual({
+      kind: 'deleted',
+      entryId: guideId,
+      wasPublished: false,
+      rebuild: null,
+    });
 
     // Absent du listing actif.
     const guides = await service.listContent('guide');

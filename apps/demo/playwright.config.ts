@@ -1,13 +1,14 @@
 import { defineConfig } from '@playwright/test';
 import { databaseUrl, kreizSecret } from './e2e/env';
+import { HOOK_URL } from './e2e/rebuild-hook-server';
 
 /**
- * E2E Playwright — parcours critiques du slice 2 uniquement
- * (login valide/invalide, admin désactivé, logout + CSRF, session
- * révoquée/expirée). Le serveur est le dev server SSR de apps/demo ; les
- * routes admin sont identiques en dev et en production (Argon2id, sessions
- * Neon, guards). La CSP `<meta>` native d'Astro n'est émise qu'au
- * build/preview — non assertée ici.
+ * E2E Playwright — parcours critiques des slices 2-4 (auth, contenu,
+ * publication/rebuild). Le serveur est le dev server SSR de apps/demo ; les
+ * routes admin sont identiques en dev et en production. Le deploy hook de
+ * rebuild pointe sur le **serveur local contrôlé** (`rebuild-hook-server.ts`)
+ * démarré par le global-setup : aucun vrai déploiement Vercel n'est jamais
+ * déclenché (mission §50).
  */
 export default defineConfig({
   testDir: './e2e',
@@ -36,6 +37,7 @@ export default defineConfig({
     env: {
       KREIZ_DATABASE_URL: databaseUrl,
       KREIZ_SECRET: kreizSecret,
+      KREIZ_REBUILD_DEPLOY_HOOK_URL: HOOK_URL,
     },
   },
 });

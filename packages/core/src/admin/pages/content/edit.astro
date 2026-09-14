@@ -7,13 +7,18 @@ import MessagePanel from '../../components/MessagePanel.astro';
 import {
   ADMIN_CONTENT_INDEX_PATH,
   ADMIN_LOGIN_PATH,
+  ADMIN_REBUILD_PATH,
   adminContentDeletePath,
+  adminContentPublishPath,
   adminContentTypePath,
+  adminContentUnpublishPath,
   adminPreviewPath,
 } from '../../../http/admin-routes.js';
 import { CSRF_FORM_FIELD, verifySessionCsrfToken } from '../../../http/csrf.js';
 import { parseContentForm, type FormFieldValue } from '../../../http/content-form.js';
 import { isTrustedSameSiteMutation } from '../../../http/mutations.js';
+import { publicPath } from '../../../domain/content/redirect-engine.js';
+import { hasUnpublishedChanges } from '../../../domain/content/publication-state.js';
 import {
   authenticateContentPage,
   formValuesFromData,
@@ -64,6 +69,18 @@ if (errorStatus !== null) {
   Astro.response.status = errorStatus;
 }
 
+// État de publication (mission §28) : statuts clairs, wording honnête —
+// un Save sur un publié ne met jamais le site à jour, l'UI doit le dire.
+const entry = loaded?.entry ?? null;
+const isPublished = entry?.status === 'published';
+const hasEverBeenPublished = entry?.publishedSlug !== null && entry?.publishedSlug !== undefined;
+const unpublishedChanges = entry ? hasUnpublishedChanges(entry) : false;
+const publishedPath =
+  entry?.publishedSlug != null && declaration
+    ? publicPath(declaration.routeNamespace, entry.publishedSlug)
+    : null;
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+
 // État du formulaire (re-rendu fidèle en cas d'erreur de validation).
 let formTitle = loaded?.entry.title ?? '';
 let formSlug = loaded?.entry.slug ?? '';
@@ -73,7 +90,13 @@ let fieldValues: Record<string, FormFieldValue> = formValuesFromData(
 );
 let fieldErrors: Record<string, string> = {};
 let formError: string | null = null;
+
+// Bandeaux de résultat (redirections 303 des mutations POST).
 const saved = Astro.url.searchParams.get('saved') === '1';
+const published = Astro.url.searchParams.get('published') === '1';
+const unpublished = Astro.url.searchParams.get('unpublished') === '1';
+const rebuildState = Astro.url.searchParams.get('rebuild');
+const publishError = Astro.url.searchParams.get('publish_error');
 
 if (loaded && Astro.request.method === 'POST') {
   // Mutations : même protection que le slice 2 (same-site + CSRF lié à la
@@ -148,22 +171,130 @@ if (loaded && Astro.request.method === 'POST') {
         backLabel="Retour au contenu"
       />
     ) : (
-      loaded && (
+      loaded &&
+      entry &&
+      declaration && (
         <>
-          {saved && (
-            <div class="kz-banner kz-banner--success" role="status">
-              Brouillon enregistré.
+          {published && !publishError && (
+            <div class:list={['kz-banner', rebuildState === 'failed' ? 'kz-banner--warning' : 'kz-banner--success']} role="status">
+              {rebuildState === 'ok' && (
+                <>Contenu publié — reconstruction du site demandée. La nouvelle version apparaîtra en ligne dès la fin du build.</>
+              )}
+              {rebuildState === 'unconfigured' && (
+                <>Contenu publié en base — aucun moteur de rebuild n'est configuré : le site public ne sera pas reconstruit automatiquement.</>
+              )}
+              {rebuildState === 'failed' && (
+                <>Contenu publié en base, mais la reconstruction a échoué : le site public reste inchangé (dernier site valide conservé). Vous pouvez relancer le déploiement.</>
+              )}
             </div>
           )}
+          {unpublished && (
+            <div class:list={['kz-banner', rebuildState === 'failed' ? 'kz-banner--warning' : 'kz-banner--success']} role="status">
+              {rebuildState === 'ok' && (
+                <>Contenu dépublié — la page publique sera retirée du site à la prochaine reconstruction.</>
+              )}
+              {rebuildState === 'unconfigured' && (
+                <>Contenu dépublié en base — aucun moteur de rebuild n'est configuré : la page publique reste en ligne jusqu'à la prochaine reconstruction.</>
+              )}
+              {rebuildState === 'failed' && (
+                <>Contenu dépublié en base, mais la reconstruction a échoué : le site public reste inchangé. Vous pouvez relancer le déploiement.</>
+              )}
+            </div>
+          )}
+          {saved && (
+            <div class="kz-banner kz-banner--success" role="status">
+              {isPublished
+                ? 'Modifications enregistrées — non publiées. La version publique reste en ligne jusqu’à la prochaine publication.'
+                : 'Brouillon enregistré.'}
+            </div>
+          )}
+          {/* Reconstruction seule (retry depuis ce même écran) — sans published/unpublished. */}
+          {!published && !unpublished && rebuildState && (
+            <div class:list={['kz-banner', rebuildState === 'ok' ? 'kz-banner--success' : 'kz-banner--warning']} role="status">
+              {rebuildState === 'ok' && 'Déploiement relancé — reconstruction du site demandée.'}
+              {rebuildState === 'failed' && 'La reconstruction a encore échoué : le dernier site valide reste en ligne.'}
+              {rebuildState === 'unconfigured' && 'Aucun moteur de rebuild n’est configuré : la relance n’a rien déclenché.'}
+            </div>
+          )}
+          {publishError === 'validation' && (
+            <div class="kz-banner kz-banner--warning" role="alert">
+              Publication impossible : le contenu actuel est invalide. Corrigez les champs puis republiez.
+            </div>
+          )}
+          {publishError === 'conflict' && (
+            <div class="kz-banner kz-banner--warning" role="alert">
+              Publication impossible : l'ancienne adresse publique est actuellement utilisée par un autre contenu. Modifiez le slug de l'un des deux contenus.
+            </div>
+          )}
+
+          {/* Panneau d'état de publication — statut clair, wording honnête (mission §28). */}
+          <section class="kz-panel kz-publication-state" aria-label="État de publication">
+            <div class="kz-publication-state__row">
+              <span
+                class:list={['kz-badge', isPublished ? 'kz-badge--published' : 'kz-badge--draft']}
+              >
+                {isPublished ? 'Publié' : hasEverBeenPublished ? 'Dépublié' : 'Brouillon'}
+              </span>
+              <span class="kz-publication-state__text">
+                {!hasEverBeenPublished && (
+                  <>Ce contenu n'est pas encore visible sur le site public. Publiez-le pour générer sa page.</>
+                )}
+                {hasEverBeenPublished && isPublished && !unpublishedChanges && (
+                  <>
+                    Adresse publique : <code class="kz-slug">{publishedPath}</code>
+                    {entry.publishedAt && (
+                      <span class="kz-publication-state__meta">
+                        {' '}— première publication : {dateFormatter.format(entry.publishedAt)}
+                      </span>
+                    )}
+                  </>
+                )}
+                {hasEverBeenPublished && isPublished && unpublishedChanges && (
+                  <>
+                    Modifications non publiées — la version publique{' '}
+                    <code class="kz-slug">{publishedPath}</code> reste en ligne jusqu'à la prochaine
+                    publication{entry.slug !== entry.publishedSlug && (
+                      <> (nouvelle adresse : <code class="kz-slug">/{declaration.routeNamespace}/{entry.slug}</code>)</>
+                    )}.
+                  </>
+                )}
+                {hasEverBeenPublished && !isPublished && (
+                  <>
+                    Ce contenu est retiré du site public à la prochaine reconstruction
+                    {publishedPath && (
+                      <> (dernière adresse publique : <code class="kz-slug">{publishedPath}</code>)</>
+                    )}
+                    . Republiez pour le remettre en ligne.
+                  </>
+                )}
+              </span>
+            </div>
+          </section>
+
           <div class="kz-page-actions kz-page-actions--spread">
             <a class="kz-button kz-button--ghost" href={adminPreviewPath(entryId)}>
               Preview
             </a>
-            <form method="post" action={adminContentDeletePath(declaration.key, entryId)}>
-              <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
-              <button class="kz-button kz-button--danger" type="submit">Supprimer</button>
-            </form>
+            <div class="kz-page-actions">
+              <form method="post" action={adminContentPublishPath(declaration.key, entryId)}>
+                <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                <button class="kz-button" type="submit">
+                  {isPublished ? 'Publier les modifications' : 'Publier'}
+                </button>
+              </form>
+              {isPublished && (
+                <form method="post" action={adminContentUnpublishPath(declaration.key, entryId)}>
+                  <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                  <button class="kz-button kz-button--ghost" type="submit">Dépublier</button>
+                </form>
+              )}
+              <form method="post" action={adminContentDeletePath(declaration.key, entryId)}>
+                <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                <button class="kz-button kz-button--danger" type="submit">Supprimer</button>
+              </form>
+            </div>
           </div>
+
           <form class="kz-form" method="post" novalidate>
             {formError && (
               <p class="kz-alert" role="alert">
@@ -192,6 +323,7 @@ if (loaded && Astro.request.method === 'POST') {
               <label class="kz-label" for="kz-slug">Slug</label>
               <p class="kz-help">
                 Adresse publique : /{declaration.routeNamespace}/{formSlug || '…'} — lettres minuscules, chiffres et tirets.
+                {isPublished && ' Changer le slug d’un contenu publié créera une redirection 301 de l’ancienne adresse à la prochaine publication.'}
               </p>
               <input
                 class="kz-input"
@@ -213,9 +345,24 @@ if (loaded && Astro.request.method === 'POST') {
               <a class="kz-button kz-button--ghost" href={adminContentTypePath(declaration.key)}>
                 Retour au listing
               </a>
-              <button class="kz-button" type="submit">Enregistrer le brouillon</button>
+              <button class="kz-button" type="submit">
+                {isPublished ? 'Enregistrer (sans publier)' : 'Enregistrer le brouillon'}
+              </button>
             </div>
+            {isPublished && (
+              <p class="kz-help">
+                L'enregistrement ne modifie pas le site public — seulement la publication le met à jour.
+              </p>
+            )}
           </form>
+
+          {rebuildState === 'failed' && (
+            <form method="post" action={ADMIN_REBUILD_PATH}>
+              <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+              <input type="hidden" name="return_to" value={Astro.url.pathname} />
+              <button class="kz-button kz-button--ghost" type="submit">Relancer le déploiement</button>
+            </form>
+          )}
         </>
       )
     )

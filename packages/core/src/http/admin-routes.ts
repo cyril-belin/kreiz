@@ -34,8 +34,17 @@ export const ADMIN_CONTENT_NEW_PATTERN = '/admin/content/[type]/new';
 export const ADMIN_CONTENT_EDIT_PATTERN = '/admin/content/[type]/[id]';
 /** Soft delete — mutation POST dédiée (jamais de GET destructeur). */
 export const ADMIN_CONTENT_DELETE_PATTERN = '/admin/content/[type]/[id]/delete';
+/** Publication — mutation POST dédiée (slice 4). */
+export const ADMIN_CONTENT_PUBLISH_PATTERN = '/admin/content/[type]/[id]/publish';
+/** Dépublication — mutation POST dédiée (slice 4). */
+export const ADMIN_CONTENT_UNPUBLISH_PATTERN = '/admin/content/[type]/[id]/unpublish';
 /** Preview SSR d'un brouillon avec le vrai template du Project. */
 export const ADMIN_PREVIEW_PATTERN = '/admin/preview/[id]';
+
+// ——— Reconstruction du site (slice 4) ———
+
+/** Rebuild manuel — mutation POST authentifiée, même port `RebuildTrigger`. */
+export const ADMIN_REBUILD_PATH = '/admin/rebuild';
 
 /** Patterns des routes admin injectées par l'intégration (tous sous le préfixe). */
 export const ADMIN_ROUTE_PATTERNS = [
@@ -47,7 +56,10 @@ export const ADMIN_ROUTE_PATTERNS = [
   ADMIN_CONTENT_NEW_PATTERN,
   ADMIN_CONTENT_EDIT_PATTERN,
   ADMIN_CONTENT_DELETE_PATTERN,
+  ADMIN_CONTENT_PUBLISH_PATTERN,
+  ADMIN_CONTENT_UNPUBLISH_PATTERN,
   ADMIN_PREVIEW_PATTERN,
+  ADMIN_REBUILD_PATH,
 ] as const;
 
 // ——— Constructeurs d'URL admin (pages et formulaires) ———
@@ -66,6 +78,14 @@ export function adminContentEditPath(contentTypeKey: string, entryId: string): s
 
 export function adminContentDeletePath(contentTypeKey: string, entryId: string): string {
   return `${adminContentEditPath(contentTypeKey, entryId)}/delete`;
+}
+
+export function adminContentPublishPath(contentTypeKey: string, entryId: string): string {
+  return `${adminContentEditPath(contentTypeKey, entryId)}/publish`;
+}
+
+export function adminContentUnpublishPath(contentTypeKey: string, entryId: string): string {
+  return `${adminContentEditPath(contentTypeKey, entryId)}/unpublish`;
 }
 
 export function adminPreviewPath(entryId: string): string {

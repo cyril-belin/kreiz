@@ -4,6 +4,7 @@ import {
   contentEntries,
   type KreizContentEntry,
   type KreizContentEntryInsert,
+  type KreizContentSeo,
 } from '../tables/content-entries.js';
 
 /**
@@ -11,10 +12,14 @@ import {
  *
  * Surface portée par les slices : création, lecture typée, lookup par slug
  * actif (slice 1) puis listing, édition de brouillon, soft delete et
- * vérification de collision de slug (slice 3). La publication
- * (published_at, statut) et les lectures orientées build public sont
- * servies par le lecteur `@kreiz/core/content` — pas de méthode de
- * publication ici (slice 4).
+ * vérification de collision de slug (slice 3), publication et lectures
+ * orientées build public (slice 4).
+ *
+ * Frontière de publication : `markPublished` / `markUnpublished` sont des
+ * primitives d'état — la décision (validation, redirections, audit, rebuild)
+ * appartient au service de publication, jamais ici. `updateDraft` ne touche
+ * jamais les colonnes snapshot publiées (une édition ne modifie que l'état
+ * éditorial courant — contrat « Save != Publish »).
  *
  * Le SQL brut (`db.execute`) n'apparaît que dans les tests ; les pages
  * admin passent par le service contenu, jamais par ce repository
@@ -155,6 +160,129 @@ export function createContentEntriesRepository(db: KreizDatabase) {
         )
         .limit(1);
       return rows.length > 0;
+    },
+
+    /**
+     * Publie : `status = published`, fige le dernier état public (snapshots
+     * `published_*`) et pose la traçabilité. `publishedAt` est calculé par
+     * le service (`entry.publishedAt ?? now` — la date de première
+     * publication n'est jamais réécrite, mission §6). Les écritures
+     * publiques (redirections) restent des opérations séparées du service :
+     * le driver neon-http ne supporte pas de transaction interactive
+     * (mission §32) — le point de bascule est ce single UPDATE. Retourne
+     * `null` si l'entrée est absente ou déjà supprimée.
+     */
+    async markPublished(
+      id: string,
+      patch: {
+        publishedAt: Date;
+        publishedSlug: string;
+        publishedTitle: string;
+        publishedData: Record<string, unknown>;
+        publishedSeo: KreizContentSeo;
+        updatedBy: string;
+        updatedAt: Date;
+      },
+    ): Promise<KreizContentEntry | null> {
+      const rows = await db
+        .update(contentEntries)
+        .set({
+          status: 'published',
+          publishedAt: patch.publishedAt,
+          publishedSlug: patch.publishedSlug,
+          publishedTitle: patch.publishedTitle,
+          publishedData: patch.publishedData,
+          publishedSeo: patch.publishedSeo,
+          updatedBy: patch.updatedBy,
+          updatedAt: patch.updatedAt,
+        })
+        .where(and(eq(contentEntries.id, id), isNull(contentEntries.deletedAt)))
+        .returning();
+      return rows.at(0) ?? null;
+    },
+
+    /**
+     * Dépublie : `status = draft`. Conserve le contenu **et** l'historique
+     * public (`published_at`, snapshots `published_*`) — la date de première
+     * publication et le dernier chemin public ne sont jamais perdus
+     * (mission §6, §7). Retourne `null` si l'entrée est absente ou déjà
+     * supprimée.
+     */
+    async markUnpublished(
+      id: string,
+      patch: { updatedBy: string; updatedAt: Date },
+    ): Promise<KreizContentEntry | null> {
+      const rows = await db
+        .update(contentEntries)
+        .set({
+          status: 'draft',
+          updatedBy: patch.updatedBy,
+          updatedAt: patch.updatedAt,
+        })
+        .where(and(eq(contentEntries.id, id), isNull(contentEntries.deletedAt)))
+        .returning();
+      return rows.at(0) ?? null;
+    },
+
+    /**
+     * Listing **publié** d'un type, du plus récemment publié au plus ancien —
+     * lecteur de build public (pages prérendues). Chaque ligne porte son
+     * dernier état public (snapshots) : la projection est résolue par le
+     * domaine (`resolvePublishedProjection`), pas ici.
+     */
+    listPublishedByType(
+      contentType: string,
+      options: { limit?: number } = {},
+    ): Promise<KreizContentEntry[]> {
+      return db
+        .select()
+        .from(contentEntries)
+        .where(
+          and(
+            eq(contentEntries.contentType, contentType),
+            eq(contentEntries.status, 'published'),
+            isNull(contentEntries.deletedAt),
+          ),
+        )
+        .orderBy(desc(contentEntries.publishedAt))
+        .limit(options.limit ?? 500);
+    },
+
+    /**
+     * Contenu publié par **slug public** (`published_slug`) — l'espace d'URL
+     * public est celui du dernier état figé, jamais du slug éditorial
+     * courant (un slug modifié non publié ne résout aucune page).
+     */
+    findPublishedByNamespaceAndPublishedSlug(
+      routeNamespace: string,
+      publishedSlug: string,
+    ): Promise<KreizContentEntry | null> {
+      return db
+        .select()
+        .from(contentEntries)
+        .where(
+          and(
+            eq(contentEntries.routeNamespace, routeNamespace),
+            eq(contentEntries.publishedSlug, publishedSlug),
+            eq(contentEntries.status, 'published'),
+            isNull(contentEntries.deletedAt),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows.at(0) ?? null);
+    },
+
+    /** Tous les chemins publiés vivants — matérialisation des redirections au build. */
+    listPublishedRoutes(): Promise<Array<{ routeNamespace: string; slug: string }>> {
+      return db
+        .select({ routeNamespace: contentEntries.routeNamespace, slug: contentEntries.publishedSlug })
+        .from(contentEntries)
+        .where(
+          and(eq(contentEntries.status, 'published'), isNull(contentEntries.deletedAt)),
+        )
+        .then((rows) =>
+          rows.flatMap((row) => (row.slug === null ? [] : [{ routeNamespace: row.routeNamespace, slug: row.slug }])),
+        );
     },
   };
 }

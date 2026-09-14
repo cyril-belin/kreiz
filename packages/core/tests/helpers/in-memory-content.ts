@@ -1,18 +1,21 @@
 import type { KreizAdminAuditLog } from '../../src/data/tables/admin-audit-log';
 import type { KreizContentEntry } from '../../src/data/tables/content-entries';
+import type { KreizRedirect } from '../../src/data/tables/redirects';
 import type { ContentEntriesRepository } from '../../src/data/repositories/content-entries';
+import type { RedirectsRepository } from '../../src/data/repositories/redirects';
 
 /**
- * Repository contenu **en mémoire** — double de test pour les règles de
- * domaine sans PostgreSQL. Il reproduit la sémantique de l'index unique
- * partiel `(route_namespace, slug) WHERE deleted_at IS NULL` :
+ * Repositories **en mémoire** — doubles de test pour les règles de domaine
+ * sans PostgreSQL. Ils reproduisent la sémantique de l'index unique partiel
+ * `(route_namespace, slug) WHERE deleted_at IS NULL` :
  * `slugExistsInNamespace` ne regarde que les lignes actives.
  *
- * Les comportements PostgreSQL réels (index partiel, 23505, dates) restent
- * couverts par les tests d'intégration sur Neon.
+ * Les comportements PostgreSQL réels (index partiel, 23505, dates, upsert
+ * `from_path`) restent couverts par les tests d'intégration sur Neon.
  */
 export type InMemoryContentState = {
   entries: Map<string, KreizContentEntry>;
+  redirects: Map<string, KreizRedirect>;
   auditRows: KreizAdminAuditLog[];
 };
 
@@ -27,6 +30,10 @@ export function stubContentEntry(values: Partial<KreizContentEntry> = {}): Kreiz
     coverMediaId: null,
     status: 'draft',
     publishedAt: null,
+    publishedSlug: null,
+    publishedTitle: null,
+    publishedData: null,
+    publishedSeo: null,
     seo: {},
     data: {},
     createdBy: crypto.randomUUID(),
@@ -39,7 +46,7 @@ export function stubContentEntry(values: Partial<KreizContentEntry> = {}): Kreiz
 }
 
 export function createInMemoryContentRepository(
-  state: InMemoryContentState = { entries: new Map(), auditRows: [] },
+  state: InMemoryContentState = { entries: new Map(), redirects: new Map(), auditRows: [] },
 ): ContentEntriesRepository {
   const active = (entry: KreizContentEntry) => entry.deletedAt === null;
 
@@ -108,6 +115,132 @@ export function createInMemoryContentRepository(
         if (entry.routeNamespace === routeNamespace && entry.slug === slug) return true;
       }
       return false;
+    },
+
+    async markPublished(id, patch) {
+      const entry = state.entries.get(id);
+      if (!entry || !active(entry)) return null;
+      const updated: KreizContentEntry = {
+        ...entry,
+        status: 'published',
+        publishedAt: patch.publishedAt,
+        publishedSlug: patch.publishedSlug,
+        publishedTitle: patch.publishedTitle,
+        publishedData: patch.publishedData,
+        publishedSeo: patch.publishedSeo,
+        updatedBy: patch.updatedBy,
+        updatedAt: patch.updatedAt,
+      };
+      state.entries.set(id, updated);
+      return updated;
+    },
+
+    async markUnpublished(id, patch) {
+      const entry = state.entries.get(id);
+      if (!entry || !active(entry)) return null;
+      const updated: KreizContentEntry = {
+        ...entry,
+        status: 'draft',
+        updatedBy: patch.updatedBy,
+        updatedAt: patch.updatedAt,
+      };
+      state.entries.set(id, updated);
+      return updated;
+    },
+
+    async listPublishedByType(contentType, options = {}) {
+      return [...state.entries.values()]
+        .filter((entry) => active(entry) && entry.contentType === contentType && entry.status === 'published')
+        .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
+        .slice(0, options.limit ?? 500);
+    },
+
+    async findPublishedByNamespaceAndPublishedSlug(routeNamespace, publishedSlug) {
+      for (const entry of state.entries.values()) {
+        if (
+          active(entry) &&
+          entry.status === 'published' &&
+          entry.routeNamespace === routeNamespace &&
+          entry.publishedSlug === publishedSlug
+        ) {
+          return entry;
+        }
+      }
+      return null;
+    },
+
+    async listPublishedRoutes() {
+      return [...state.entries.values()]
+        .filter((entry) => active(entry) && entry.status === 'published' && entry.publishedSlug !== null)
+        .map((entry) => ({ routeNamespace: entry.routeNamespace, slug: entry.publishedSlug as string }));
+    },
+  };
+}
+
+/** Repository redirections en mémoire — upsert sur `from_path` comme l'index unique SQL. */
+export function createInMemoryRedirectsRepository(
+  state: InMemoryContentState,
+): RedirectsRepository {
+  return {
+    async create(values) {
+      if (state.redirects.has(values.fromPath)) {
+        const error = new Error('duplicate') as { code?: string };
+        error.code = '23505';
+        throw error;
+      }
+      const row: KreizRedirect = {
+        id: crypto.randomUUID(),
+        fromPath: values.fromPath,
+        toPath: values.toPath,
+        contentEntryId: values.contentEntryId ?? null,
+        createdAt: new Date(),
+      };
+      state.redirects.set(row.fromPath, row);
+      return row;
+    },
+
+    async findByFromPath(fromPath) {
+      return state.redirects.get(fromPath) ?? null;
+    },
+
+    async listAll(options = {}) {
+      return [...state.redirects.values()].slice(0, options.limit ?? 10_000);
+    },
+
+    async upsert(values) {
+      const existing = state.redirects.get(values.fromPath);
+      const row: KreizRedirect = {
+        id: existing?.id ?? crypto.randomUUID(),
+        fromPath: values.fromPath,
+        toPath: values.toPath,
+        contentEntryId: values.contentEntryId,
+        createdAt: existing?.createdAt ?? new Date(),
+      };
+      state.redirects.set(row.fromPath, row);
+      return row;
+    },
+
+    async deleteByFromPaths(fromPaths) {
+      let deleted = 0;
+      for (const path of fromPaths) {
+        if (state.redirects.delete(path)) deleted += 1;
+      }
+      return deleted;
+    },
+
+    async retargetTargets(fromPathTarget, newToPath) {
+      let retargeted = 0;
+      for (const row of state.redirects.values()) {
+        if (row.toPath === fromPathTarget) {
+          state.redirects.set(row.fromPath, { ...row, toPath: newToPath });
+          retargeted += 1;
+        }
+      }
+      return retargeted;
+    },
+
+    async count() {
+      return state.redirects.size;
     },
   };
 }

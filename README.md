@@ -15,11 +15,15 @@ The repository currently contains the slice 0 foundation (monorepo, tooling, CI 
 Astro integration), the slice 1 data foundations (Neon/Drizzle schema owned by the consuming
 app, server connection layer, first domain repositories), the slice 2 admin authentication
 layer (Argon2id credentials, revocable server-side sessions, guards, CSRF, login rate
-limiting, append-only audit, the `kreiz` CLI and the `/admin` shell) and the slice 3 content
+limiting, append-only audit, the `kreiz` CLI and the `/admin` shell), the slice 3 content
 engine (code-declared content types, generic admin CRUD with generated forms, slugs with
 route namespaces, draft management, soft delete, content audit and SSR preview rendering the
-project's real templates). Features listed in the roadmap below that are not covered by
-these slices are planned, not shipped.
+project's real templates) and the slice 4 publication layer (publish/unpublish with a frozen
+"last public state", a platform-agnostic `RebuildTrigger` port with a Vercel deploy-hook
+reference adapter, automatic 301 redirects on published slug changes with chain
+normalization and loop prevention, build-time redirect materialization and a manual rebuild
+action). Features listed in the roadmap below that are not covered by these slices are
+planned, not shipped.
 
 ## Current architecture
 
@@ -41,6 +45,17 @@ these slices are planned, not shipped.
   namespaces, slug generation with collision handling, draft CRUD with soft delete,
   content audit events, and an authenticated SSR preview that renders the project's real
   templates — the same components the prerendered public pages use
+- Publication: `Save != Publish` is enforced structurally — the public build only reads
+  the frozen `published_*` snapshot columns, so saving never changes the public output.
+  Publishing validates the current state, freezes it as the public version, audits and
+  requests a rebuild through the `RebuildTrigger` port (Vercel deploy hook reference
+  adapter, configured via the optional `KREIZ_REBUILD_DEPLOY_HOOK_URL` runtime env;
+  HTTPS enforced in production, no adapter configured = explicit non-configured state).
+  Rebuild failure never damages the served site: the database stays authoritative and the
+  admin can retry from the dashboard or the edit screen. Published slug changes create
+  automatic 301 redirects with write-time chain normalization and loop prevention,
+  materialized at build time through Astro's native `redirects` config (verified in the
+  real Vercel output)
 - The `kreiz` CLI creates the first admin and resets passwords (`admin:create`,
   `admin:reset-password`)
 - Project → core configuration flows through a typed Vite virtual module,
@@ -76,6 +91,7 @@ Database (migrations live in `apps/demo` — the app owns them, not the core):
 ```sh
 cp apps/demo/.env.example apps/demo/.env   # then set KREIZ_DATABASE_URL (Neon branch)
                                            # and KREIZ_SECRET (openssl rand -base64 32)
+                                           # optionally KREIZ_REBUILD_DEPLOY_HOOK_URL
 pnpm db:generate                           # drizzle-kit generate from the composed schema
 pnpm db:migrate                            # apply apps/demo migrations (Neon HTTP driver)
 pnpm test:integration                      # against $KREIZ_DATABASE_URL (Neon) or

@@ -3,11 +3,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeTestDb } from './db';
 import { requireDatabaseUrl } from './env';
+import { startHookServer } from './rebuild-hook-server';
 
 /**
  * Préparation de l'E2E : crée les comptes admin **via le CLI `kreiz`**
  * (preuve du chemin canonique CLI → create admin → Neon, cadrage §36),
- * puis expose les identifiants aux tests par variables d'environnement.
+ * expose les identifiants aux tests par variables d'environnement et
+ * démarre le **serveur de deploy hook local** (mission §45 — le serveur dev
+ * Astro publie vers ce hook contrôlé, jamais vers un vrai Vercel).
  */
 
 const E2E_ROOT = import.meta.dirname;
@@ -48,6 +51,7 @@ function createAdminViaCli(email: string, name: string): void {
 }
 
 export default function globalSetup(): void {
+  startHookServer();
   try {
     createAdminViaCli(adminEmail, 'Admin E2E');
     createAdminViaCli(victimEmail, 'Victime E2E');

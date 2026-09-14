@@ -272,11 +272,20 @@ describe('environnement admin runtime', () => {
     KREIZ_SECRET: 's'.repeat(44),
   };
 
-  it('valide URL + secret et extrait les valeurs', () => {
+  it('valide URL + secret et extrait les valeurs (rebuild hook optionnel absent)', () => {
     expect(parseKreizAdminEnv(validEnv)).toEqual({
       databaseUrl: validEnv.KREIZ_DATABASE_URL,
       secret: validEnv.KREIZ_SECRET,
+      rebuildHookUrl: null,
     });
+  });
+
+  it('extrait l’URL du deploy hook quand elle est fournie (optionnelle)', () => {
+    const parsed = parseKreizAdminEnv({
+      ...validEnv,
+      KREIZ_REBUILD_DEPLOY_HOOK_URL: 'https://api.vercel.com/v1/integrations/deploy/hook',
+    });
+    expect(parsed.rebuildHookUrl).toBe('https://api.vercel.com/v1/integrations/deploy/hook');
   });
 
   it('rejette les environnements incomplets sans fuir les valeurs', () => {

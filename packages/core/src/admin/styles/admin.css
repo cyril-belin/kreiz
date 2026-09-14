@@ -350,6 +350,13 @@ body {
   background: #eaf6ee;
 }
 
+/* Avertissement publication : échec de rebuild, conflit d'adresse, contenu invalide. */
+.kz-banner--warning {
+  border: 1px solid #e6d3a3;
+  color: #7a5a12;
+  background: #fdf6e4;
+}
+
 .kz-panel--info {
   border-color: var(--kz-border);
 }
@@ -436,6 +443,33 @@ body {
   border: 1px solid #b9dcc0;
   color: #1d5c31;
   background: #eaf6ee;
+}
+
+/* Badge « modifications non publiées » (listing + édition). */
+.kz-badge--changed {
+  border-style: dashed;
+}
+
+/* Panneau d'état de publication de l'écran d'édition. */
+.kz-publication-state {
+  margin-bottom: 16px;
+}
+
+.kz-publication-state__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kz-publication-state__text {
+  font-size: 14px;
+  color: var(--kz-text);
+}
+
+.kz-publication-state__meta {
+  color: var(--kz-text-muted);
+  font-size: 13px;
 }
 
 .kz-row-actions {

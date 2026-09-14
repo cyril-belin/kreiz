@@ -58,3 +58,34 @@ export class ContentDeletedError extends KreizContentError {
     this.entryId = entryId;
   }
 }
+
+/**
+ * Publication refusée : l'ancien chemin public du contenu est actuellement
+ * le chemin vivant d'un **autre** contenu actif — créer la redirection
+ * masquerait cette page réelle (mission §19, cadrage §12 « ancien slug
+ * réapparu = conflit détecté »). La publication échoue **avant** toute
+ * écriture ; l'admin résout en changeant le slug de l'un des deux contenus.
+ */
+export class PublishedPathOccupiedError extends KreizContentError {
+  readonly entryId: string;
+  readonly occupiedPath: string;
+  constructor(entryId: string, occupiedPath: string) {
+    super(
+      `@kreiz/core : publication impossible — l'ancienne adresse publique ${occupiedPath} est actuellement utilisée par un autre contenu (entrée ${entryId}).`,
+    );
+    this.entryId = entryId;
+    this.occupiedPath = occupiedPath;
+  }
+}
+
+/**
+ * Garde défensive du moteur de redirections : un plan d'écriture ne crée
+ * jamais d'auto-redirection (une page ne redirecte pas vers elle-même).
+ */
+export class RedirectSelfPathError extends KreizContentError {
+  readonly path: string;
+  constructor(path: string) {
+    super(`@kreiz/core : redirection de ${path} vers lui-même interdite — boucle détectée.`);
+    this.path = path;
+  }
+}

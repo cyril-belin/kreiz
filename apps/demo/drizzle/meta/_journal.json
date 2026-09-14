@@ -15,6 +15,13 @@
       "when": 1788624552228,
       "tag": "0001_far_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789379693377,
+      "tag": "0002_shallow_lightspeed",
+      "breakpoints": true
     }
   ]
 }

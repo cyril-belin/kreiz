@@ -10,6 +10,8 @@ import {
 } from '../domain/content/errors.js';
 import { normalizeSlugInput, slugCandidates, slugify, SLUG_FALLBACK } from '../domain/content/slug.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
+import type { RebuildRequestReason, RebuildTrigger, RebuildTriggerResult } from '../ports/rebuild.js';
+import { auditRebuildFailure } from './rebuild-audit.js';
 
 /**
  * Service contenu — orchestration du moteur (cadrage §6, mission §13).
@@ -20,8 +22,12 @@ import { resolveContentViewModel, type ContentView } from '../domain/content/vie
  * client), générer/vérifier les slugs, écrire via le repository, tracer
  * `created_by` / `updated_by` et écrire l'audit avec le vrai acteur admin.
  *
- * Il ne publie pas, n'appelle aucun service d'infrastructure (Vercel, R2),
- * ne crée pas de redirections (slice 4) et ne connaît pas les templates
+ * Il publie partiellement : la **publication/dépublication** appartient au
+ * service de publication (`services/publication.ts`) ; ce service ne
+ * connaît de la reconstruction que le port `RebuildTrigger`, utilisé par la
+ * **suppression d'un contenu publié** (sa page quitte le site au prochain
+ * build — mission §31). Il n'appelle aucun service d'infrastructure
+ * (Vercel, R2), ne crée pas de redirections et ne connaît pas les templates
  * Astro — il retourne des vues que les routes rendent avec le composant du
  * Project.
  */
@@ -44,6 +50,8 @@ export type ContentServiceDeps = {
   audit: AdminAuditLogRepository;
   /** Registre des types déclarés par le Project — injecté (jamais le module virtuel). */
   registry: ContentTypeRegistry;
+  /** Port de reconstruction — utilisé uniquement par la suppression d'un publié. */
+  rebuild: RebuildTrigger;
 };
 
 /** Résultat d'une mutation de brouillon validée. */
@@ -51,7 +59,15 @@ export type ContentMutationOutcome =
   | { kind: 'created' | 'updated'; entry: KreizContentEntry; view: ContentView<unknown> }
   | { kind: 'invalid'; errors: ContentFieldErrors };
 
-export type DeleteDraftOutcome = { kind: 'deleted'; entryId: string };
+/** Résultat d'une suppression : le rebuild n'est demandé que si l'entrée était publiée (mission §31). */
+export type DeleteDraftOutcome = {
+  kind: 'deleted';
+  entryId: string;
+  /** L'entrée supprimée était publiée — sa page quitte le site au prochain build. */
+  wasPublished: boolean;
+  /** Résultat du trigger, `null` si aucun rebuild n'était nécessaire. */
+  rebuild: RebuildTriggerResult | null;
+};
 
 export type CreateDraftInput = {
   contentTypeKey: string;
@@ -91,13 +107,7 @@ export function createContentService(deps: ContentServiceDeps) {
   }
 
   function validateTitle(title: string, errors: ContentFieldErrors): string {
-    const trimmed = title.trim();
-    if (trimmed.length === 0) {
-      errors.title = 'Le titre est requis.';
-    } else if (trimmed.length > CONTENT_TITLE_MAX_LENGTH) {
-      errors.title = `Le titre ne doit pas dépasser ${CONTENT_TITLE_MAX_LENGTH} caractères.`;
-    }
-    return trimmed;
+    return validateContentTitle(title, errors);
   }
 
   /** Valide le JSONB spécifique contre le schéma strict du type déclaré. */
@@ -218,11 +228,15 @@ export function createContentService(deps: ContentServiceDeps) {
     },
 
     /**
-     * Met à jour un brouillon (titre, slug, champs du type). Le type et le
-     * namespace de l'entrée ne sont jamais modifiables ; la déclaration est
-     * résolue depuis **l'entrée** (source de vérité en base). Un slug
-     * modifié en collision est une erreur — aucun suffixage implicite, et
-     * aucune redirection (slice 4, ce slice ne publie pas).
+     * Met à jour l'**état éditorial courant** (titre, slug, champs du type).
+     * Le type et le namespace de l'entrée ne sont jamais modifiables ; la
+     * déclaration est résolue depuis **l'entrée** (source de vérité en
+     * base). Sur un contenu **publié**, l'édition ne touche jamais les
+     * colonnes snapshot `published_*` : la version publique reste figée au
+     * dernier Publish jusqu'au prochain (contrat Save != Publish, mission
+     * §5). Un slug modifié en collision est une erreur — aucun suffixage
+     * implicite ; les redirections n'appartiennent qu'au service de
+     * publication (un changement de slug non publié n'a aucun effet public).
      */
     async updateDraft(
       input: UpdateDraftInput,
@@ -336,9 +350,11 @@ export function createContentService(deps: ContentServiceDeps) {
     },
 
     /**
-     * Soft delete (mission §24) : `deleted_at = now`, audit
+     * Soft delete (mission §24, §31) : `deleted_at = now`, audit
      * `content.deleted` avec le vrai acteur, slug libéré par l'index
-     * unique partiel. Aucune purge physique.
+     * unique partiel. Aucune purge physique. Si l'entrée était **publiée**,
+     * demande la reconstruction via le port (sa page doit quitter le site) ;
+     * un brouillon jamais publié ne déclenche rien.
      */
     async deleteDraft(
       input: { entryId: string; actorAdminId: string },
@@ -360,7 +376,21 @@ export function createContentService(deps: ContentServiceDeps) {
         throw new ContentDeletedError(input.entryId);
       }
       await auditContentEvent(CONTENT_AUDIT_ACTIONS.deleted, deleted, input.actorAdminId);
-      return { kind: 'deleted', entryId: deleted.id };
+
+      // Suppression d'un contenu **publié** : sa page est dans le dernier
+      // build valide — elle doit en sortir, donc rebuild (mission §31). Un
+      // brouillon jamais publié n'a aucune page : aucun rebuild. Une entrée
+      // dépubliée avant suppression a déjà vu sa page retirée par le rebuild
+      // de l'unpublish.
+      const wasPublished = deleted.status === 'published';
+      let rebuild: RebuildTriggerResult | null = null;
+      if (wasPublished) {
+        rebuild = await deps.rebuild.requestRebuild({ reason: 'content.deleted' satisfies RebuildRequestReason });
+        if (!rebuild.ok && rebuild.failure.kind !== 'not-configured') {
+          await auditRebuildFailure(audit, input.actorAdminId, 'content.deleted', rebuild.failure);
+        }
+      }
+      return { kind: 'deleted', entryId: deleted.id, wasPublished, rebuild };
     },
   };
 }
@@ -410,5 +440,22 @@ export {
   ContentDataCorruptedError,
   ContentDeletedError,
   ContentNotFoundError,
+  PublishedPathOccupiedError,
+  RedirectSelfPathError,
   UnknownContentTypeError,
 } from '../domain/content/errors.js';
+
+/**
+ * Validation du titre commun (édition **et** publication — même règle,
+ * même message) : requis, borné. Mutateur d'erreurs par convention du
+ * module (les autres validateurs suivent la même forme).
+ */
+export function validateContentTitle(title: string, errors: ContentFieldErrors): string {
+  const trimmed = title.trim();
+  if (trimmed.length === 0) {
+    errors.title = 'Le titre est requis.';
+  } else if (trimmed.length > CONTENT_TITLE_MAX_LENGTH) {
+    errors.title = `Le titre ne doit pas dépasser ${CONTENT_TITLE_MAX_LENGTH} caractères.`;
+  }
+  return trimmed;
+}

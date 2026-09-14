@@ -17,6 +17,7 @@ import {
   stubContentEntry,
   type InMemoryContentState,
 } from './helpers/in-memory-content';
+import { createRebuildTriggerStub } from './helpers/stub-rebuild-trigger';
 
 /**
  * Service contenu — orchestration testée **sans PostgreSQL** (doubles en
@@ -59,13 +60,19 @@ function articleRegistryInput(): ContentTypeRegistryInput {
 }
 
 function createService(state?: InMemoryContentState) {
-  const contentState: InMemoryContentState = state ?? { entries: new Map(), auditRows: [] };
+  const contentState: InMemoryContentState = state ?? {
+    entries: new Map(),
+    redirects: new Map(),
+    auditRows: [],
+  };
+  const rebuild = createRebuildTriggerStub();
   const service = createContentService({
     entries: createInMemoryContentRepository(contentState),
     audit: createInMemoryAuditRepository(contentState),
     registry: createContentTypeRegistry(articleRegistryInput()),
+    rebuild,
   });
-  return { service, state: contentState };
+  return { service, state: contentState, rebuild };
 }
 
 const validArticleData = { excerpt: 'Accroche', body: 'Corps du texte.' };
@@ -437,7 +444,12 @@ describe('deleteDraft — soft delete', () => {
     if (created.kind !== 'created') throw new Error('setup');
 
     const outcome = await service.deleteDraft({ entryId: created.entry.id, actorAdminId: actorId });
-    expect(outcome).toEqual({ kind: 'deleted', entryId: created.entry.id });
+    expect(outcome).toEqual({
+      kind: 'deleted',
+      entryId: created.entry.id,
+      wasPublished: false,
+      rebuild: null,
+    });
 
     const stored = state.entries.get(created.entry.id);
     expect(stored?.deletedAt).toBeInstanceOf(Date);
@@ -475,5 +487,61 @@ describe('deleteDraft — soft delete', () => {
     await expect(
       service.deleteDraft({ entryId: '00000000-0000-0000-0000-000000000000', actorAdminId: actorId }),
     ).rejects.toThrow(ContentNotFoundError);
+  });
+
+  it('suppression d’un contenu PUBLIÉ → rebuild demandé ; brouillon jamais publié → aucun rebuild (mission §31)', async () => {
+    const { service, state, rebuild } = createService();
+    // Brouillon jamais publié : suppression sans rebuild.
+    const draft = await service.createDraft({
+      contentTypeKey: 'article',
+      title: 'Brouillon jetable',
+      data: validArticleData,
+      actorAdminId: actorId,
+    });
+    if (draft.kind !== 'created') throw new Error('setup');
+    await service.deleteDraft({ entryId: draft.entry.id, actorAdminId: actorId });
+    expect(rebuild.calls).toHaveLength(0);
+
+    // Contenu publié (snapshots figés) : sa page est dans le dernier build → rebuild.
+    const published = stubContentEntry({
+      title: 'Publié à supprimer',
+      slug: 'publié-a-supprimer',
+      status: 'published',
+      publishedAt: new Date(),
+      publishedSlug: 'publié-a-supprimer',
+      publishedTitle: 'Publié à supprimer',
+      publishedData: validArticleData,
+      publishedSeo: {},
+      createdBy: actorId,
+      updatedBy: actorId,
+    });
+    state.entries.set(published.id, published);
+    rebuild.calls.length = 0;
+
+    const outcome = await service.deleteDraft({ entryId: published.id, actorAdminId: actorId });
+    expect(outcome.wasPublished).toBe(true);
+    expect(outcome.rebuild).toEqual({ ok: true, requestId: 'req-stub' });
+    expect(rebuild.calls).toEqual([{ reason: 'content.deleted' }]);
+    // L'échec du trigger après suppression : DB reste soft-deleted, échec audité.
+    rebuild.nextResult = { ok: false, failure: { kind: 'rejected', statusCode: 500 } };
+    const published2 = stubContentEntry({
+      status: 'published',
+      publishedAt: new Date(),
+      publishedSlug: 'publié-2',
+      publishedTitle: 'Publié 2',
+      publishedData: validArticleData,
+      publishedSeo: {},
+      createdBy: actorId,
+      updatedBy: actorId,
+    });
+    state.entries.set(published2.id, published2);
+    const outcome2 = await service.deleteDraft({ entryId: published2.id, actorAdminId: actorId });
+    expect(outcome2.rebuild).toEqual({ ok: false, failure: { kind: 'rejected', statusCode: 500 } });
+    expect(state.entries.get(published2.id)?.deletedAt).toBeInstanceOf(Date);
+    expect(
+      state.auditRows.some(
+        (row) => row.action === 'site.rebuild_failed' && row.actorAdminId === actorId,
+      ),
+    ).toBe(true);
   });
 });

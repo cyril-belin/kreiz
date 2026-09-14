@@ -12,6 +12,7 @@ import {
   adminContentNewPath,
 } from '../../../http/admin-routes.js';
 import { CSRF_FORM_FIELD } from '../../../http/csrf.js';
+import { hasUnpublishedChanges } from '../../../domain/content/publication-state.js';
 import { authenticateContentPage } from '../../lib/content-page.js';
 
 const access = await authenticateContentPage(Astro);
@@ -88,6 +89,12 @@ const statusLabels: Record<string, string> = { draft: 'Brouillon', published: 'P
                       <span class:list={['kz-badge', entry.status === 'draft' ? 'kz-badge--draft' : 'kz-badge--published']}>
                         {statusLabels[entry.status] ?? entry.status}
                       </span>
+                      {/* « Modifications non publiées » = calcul snapshot ⇄ courant, aucun état DB supplémentaire (mission §29). */}
+                      {hasUnpublishedChanges(entry) && (
+                        <span class="kz-badge kz-badge--draft kz-badge--changed" title="Enregistré mais non publié — la version publique reste en ligne jusqu'à la publication.">
+                          Non publié
+                        </span>
+                      )}
                     </td>
                     <td data-label="Slug">
                       <code class="kz-slug">/{declaration.routeNamespace}/{entry.slug}</code>

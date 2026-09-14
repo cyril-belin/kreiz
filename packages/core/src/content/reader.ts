@@ -1,6 +1,7 @@
 import { createKreizDatabase, type KreizDatabase } from '../data/connection.js';
 import { createContentEntriesRepository } from '../data/repositories/content-entries.js';
 import type { ContentTypeDefinition, InferContentTypeData } from '../domain/content/declaration.js';
+import { resolvePublishedProjection } from '../domain/content/publication-state.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
 
 /**
@@ -18,22 +19,26 @@ import { resolveContentViewModel, type ContentView } from '../domain/content/vie
  * }
  * ```
  *
- * Seuls les contenus `published` non supprimés sont exposés (au slice 3,
- * rien n'est encore publié — les routes publiques émettent 0 page tant que
- * la publication n'existe pas, mission §22 option A). Les données invalides
- * en base font **échouer le build** (`resolveContentViewModel` lève) : on ne
- * prérend jamais silencieusement du contenu invalide. Zéro requête Neon au
- * moment de servir : ces pages sont du HTML statique.
+ * Seuls les contenus `published` non supprimés sont exposés, et **uniquement
+ * leur dernier état effectivement public** (colonnes snapshot `published_*`,
+ * figées par Publish — mission §5, §20) : l'URL générée est `published_slug`,
+ * jamais le slug éditorial courant. Un Save — même sur un contenu publié —
+ * ne change donc jamais la sortie du build (contrat Save != Publish).
+ *
+ * Les données publiées invalides en base font **échouer le build**
+ * (`resolveContentViewModel` / `resolvePublishedProjection` lèvent) : on ne
+ * prérend jamais silencieusement du contenu invalide ou incohérent. Zéro
+ * requête Neon au moment de servir : ces pages sont du HTML statique.
  */
 export interface ContentReader {
-  /** Contenus publiés d'un type, du plus récemment publié au plus ancien. */
+  /** Contenus publiés d'un type (dernier état public), du plus récemment publié au plus ancien. */
   listPublishedViews<D extends ContentTypeDefinition>(options: {
     declaration: D;
     /** Nombre maximal d'entrées lues (défaut 500 — garde-fou de build). */
     limit?: number;
   }): Promise<Array<ContentView<InferContentTypeData<D>>>>;
 
-  /** Un contenu publié par slug, ou `null` (404 au build). */
+  /** Un contenu publié par **slug public**, ou `null` (404 au build). */
   getPublishedViewBySlug<D extends ContentTypeDefinition>(options: {
     declaration: D;
     slug: string;
@@ -46,11 +51,19 @@ export function createContentReader(options: { databaseUrl: string }): ContentRe
 
   return {
     async listPublishedViews({ declaration, limit = 500 }) {
-      const rows = await entries.listByType(declaration.key, { limit });
+      const rows = await entries.listPublishedByType(declaration.key, { limit });
       const views: Array<ContentView<InferContentTypeData<typeof declaration>>> = [];
       for (const row of rows) {
-        if (row.status !== 'published') continue;
-        views.push(resolveContentViewModel(declaration, row));
+        const published = resolvePublishedProjection(row);
+        views.push(
+          resolveContentViewModel(declaration, {
+            ...row,
+            title: published.title,
+            slug: published.slug,
+            data: published.data,
+            seo: published.seo,
+          }),
+        );
       }
       views.sort(
         (a, b) =>
@@ -61,9 +74,19 @@ export function createContentReader(options: { databaseUrl: string }): ContentRe
     },
 
     async getPublishedViewBySlug({ declaration, slug }) {
-      const row = await entries.findActiveByNamespaceAndSlug(declaration.routeNamespace, slug);
-      if (!row || row.status !== 'published') return null;
-      return resolveContentViewModel(declaration, row);
+      const row = await entries.findPublishedByNamespaceAndPublishedSlug(
+        declaration.routeNamespace,
+        slug,
+      );
+      if (!row) return null;
+      const published = resolvePublishedProjection(row);
+      return resolveContentViewModel(declaration, {
+        ...row,
+        title: published.title,
+        slug: published.slug,
+        data: published.data,
+        seo: published.seo,
+      });
     },
   };
 }
