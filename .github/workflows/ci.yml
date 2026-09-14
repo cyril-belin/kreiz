@@ -116,7 +116,14 @@ jobs:
 
       - name: Secret de déploiement éphémère pour l'E2E (rate limiting login)
         if: steps.neon-branch.outputs.url != ''
-        run: echo "KREIZ_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+        run: |
+          # GitHub ne masque automatiquement que les secrets de dépôt : une
+          # valeur générée dans le workflow doit être déclarée à add-mask,
+          # sinon elle apparaît en clair dans les dumps `env:` des étapes
+          # suivantes (constaté sur le run du slice 3).
+          VALUE=$(openssl rand -base64 32)
+          echo "::add-mask::$VALUE"
+          echo "KREIZ_SECRET=$VALUE" >> "$GITHUB_ENV"
 
       - name: Installer le navigateur Playwright
         if: steps.neon-branch.outputs.url != ''
