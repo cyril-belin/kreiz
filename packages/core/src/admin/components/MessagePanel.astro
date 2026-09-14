@@ -1,0 +1,33 @@
+---
+export const prerender = false;
+
+/**
+ * Panneau de message admin — erreurs de navigation (type inconnu, contenu
+ * introuvable/supprimé, données corrompues) et confirmations. Messages
+ * propres uniquement : jamais SQL, stack trace ni payload interne (mission
+ * §27).
+ */
+interface Props {
+  tone?: 'error' | 'info' | 'success';
+  title: string;
+  description?: string;
+  backHref?: string;
+  backLabel?: string;
+}
+
+const { tone = 'error', title, description, backHref, backLabel = 'Retour' } = Astro.props;
+---
+
+<section class:list={['kz-panel', `kz-panel--${tone}`]} aria-labelledby="kz-message-title">
+  <h2 class="kz-panel__title" id="kz-message-title">{title}</h2>
+  {description && <p class="kz-panel__text">{description}</p>}
+  {
+    backHref && (
+      <p>
+        <a class="kz-button kz-button--ghost" href={backHref}>
+          {backLabel}
+        </a>
+      </p>
+    )
+  }
+</section>

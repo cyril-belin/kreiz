@@ -1,0 +1,86 @@
+---
+export const prerender = false;
+
+import { ADMIN_LOGIN_PATH } from '../../http/admin-routes.js';
+import { authenticateContentPage } from '../lib/content-page.js';
+
+/**
+ * Preview SSR d'un brouillon (cadrage §9, mission §20) — `/admin/preview/[id]`.
+ *
+ * Garanties :
+ * - **authentifiée** : guard de session admin, sous `/admin` (le cookie y
+ *   vit) ;
+ * - **noindex** : `X-Robots-Tag` (en-têtes admin posés par le socle commun)
+ *   + `<meta>` ;
+ * - **exactement le template public du Project** : le composant vient du
+ *   registre (module virtuel `virtual:kreiz/config`) — le même fichier que
+ *   les pages publiques importent, aucun renderer parallèle ;
+ * - **les mêmes données structurées** qu'une page publique : la vue est
+ *   résolue par `resolveContentViewModel`, mapping mutualisé preview/build
+ *   (mission §23) ;
+ * - les données invalides lèvent (`ContentDataCorruptedError`) : on ne rend
+ *   jamais silencieusement un contenu invalide (mission §4).
+ */
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+const entryId = Astro.params.id ?? '';
+
+let templateComponent: unknown = null;
+let view: unknown = null;
+let error: { status: number; title: string; description: string } | null = null;
+
+try {
+  const loaded = await access.runtime.content.getContentForPreview(entryId);
+  templateComponent = loaded.declaration.template;
+  view = loaded.view;
+} catch (cause) {
+  const name = (cause as { name?: string }).name;
+  if (name === 'ContentNotFoundError') {
+    error = { status: 404, title: 'Contenu introuvable', description: "Ce contenu n'existe pas." };
+  } else if (name === 'ContentDeletedError') {
+    error = { status: 410, title: 'Contenu supprimé', description: 'Ce contenu a été supprimé.' };
+  } else if (name === 'ContentDataCorruptedError' || name === 'UnknownContentTypeError') {
+    error = {
+      status: 422,
+      title: 'Contenu non rendable',
+      description:
+        'Les données de ce contenu ne sont pas valides pour son type déclaré. Le contenu n’est pas rendu.',
+    };
+  } else {
+    throw cause;
+  }
+  Astro.response.status = error.status;
+}
+
+// Le composant .astro du Project, tel qu'importé par le module virtuel.
+// Cast confiné à cette page : le type runtime d'un composant Astro n'est pas
+// exprimable proprement hors bundler (compromis documenté, mission §28).
+const Template = templateComponent as astroHTML.JSX.Element | null;
+---
+
+{
+  Template && view !== null ? (
+    <Template view={view as never} />
+  ) : (
+    <html lang="fr">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex, nofollow" />
+        <title>Preview — Kreiz</title>
+      </head>
+      <body class="kz-preview-error">
+        <section class="kz-panel kz-panel--error" aria-labelledby="kz-preview-error-title">
+          <h1 class="kz-panel__title" id="kz-preview-error-title">{error?.title}</h1>
+          <p class="kz-panel__text">{error?.description}</p>
+          <p>
+            <a class="kz-button kz-button--ghost" href="/admin">Retour au back-office</a>
+          </p>
+        </section>
+      </body>
+    </html>
+  )
+}

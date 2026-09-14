@@ -1,12 +1,11 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import * as adminRoutes from '../src/http/admin-routes';
 import {
   ADMIN_HOME_PATH,
-  ADMIN_LOGIN_PATH,
-  ADMIN_LOGOUT_PATH,
-  ADMIN_ROUTE_PREFIX,
   ADMIN_ROUTE_PATTERNS,
+  ADMIN_ROUTE_PREFIX,
 } from '../src/http/admin-routes';
 import {
   adminSessionCookieOptions,
@@ -16,8 +15,8 @@ import {
 } from '../src/http/cookies';
 
 /**
- * Garde mécanique de l'invariant **cookie `Path=/admin` ⇔ routes authentifiées
- * sous `/admin/*`** (revue slice 2).
+ * Garde mécanique de l'invariant **cookie `Path=/admin` ⇔ routes
+ * authentifiées sous `/admin/*`** (revue slice 2, étendu au slice 3).
  *
  * Le cookie de session n'est émis qu'avec `Path=/admin` : le navigateur ne
  * l'envoie jamais avec les requêtes du site public. Ce bénéfice impose que
@@ -27,6 +26,10 @@ import {
  *   `/api/kreiz/admin/...`) — c'est le cas d'usage qui ferait passer
  *   accidentellement le cookie à `Path=/` ;
  * - le chemin du cookie s'écarte du préfixe.
+ *
+ * Depuis le slice 3, **aucune route injectée n'est publique** : la route
+ * spike `/api/kreiz/spike` (slice 0) a été supprimée — le test l'interdit
+ * explicitement.
  */
 
 describe('invariant namespace admin — routes authentifiées sous /admin/*', () => {
@@ -42,7 +45,7 @@ describe('invariant namespace admin — routes authentifiées sous /admin/*', ()
   });
 
   it('les routes authentifiées du Core vivent toutes sous le préfixe /admin', () => {
-    expect(ADMIN_ROUTE_PATTERNS).toEqual([ADMIN_HOME_PATH, ADMIN_LOGIN_PATH, ADMIN_LOGOUT_PATH]);
+    expect(ADMIN_ROUTE_PATTERNS.length).toBeGreaterThanOrEqual(9); // slice 2 + slice 3
     for (const pattern of ADMIN_ROUTE_PATTERNS) {
       // Le shell est le préfixe exact ; les autres routes sont sous /admin/…
       expect(
@@ -54,22 +57,31 @@ describe('invariant namespace admin — routes authentifiées sous /admin/*', ()
     expect(ADMIN_HOME_PATH).toBe(ADMIN_ROUTE_PREFIX);
   });
 
-  it('chaque route injectée par l’intégration est la spike publique ou vit sous /admin', () => {
-    const patterns = [...integrationSource.matchAll(/pattern:\s*([A-Za-z_]+|'[^']+')/g)].map(
+  it('chaque pattern injecté par l’intégration est une constante du namespace admin', () => {
+    const patterns = [...integrationSource.matchAll(/pattern:\s*([A-Za-z_][A-Za-z0-9_]*|'[^']+')/g)].map(
       (match) => match[1]!,
     );
-    expect(patterns.length).toBeGreaterThanOrEqual(4); // spike + 3 routes admin
+    expect(patterns.length).toBe(ADMIN_ROUTE_PATTERNS.length);
     for (const pattern of patterns) {
-      const value = pattern.startsWith("'") ? pattern.slice(1, -1) : pattern;
-      if (value === '/api/kreiz/spike') continue; // route spike publique, sans session
-      // Soit une constante du namespace admin, soit un littéral sous le préfixe.
-      const resolved = value === 'ADMIN_LOGIN_PATH' || value === 'ADMIN_LOGOUT_PATH' || value === 'ADMIN_HOME_PATH'
-        ? { ADMIN_LOGIN_PATH, ADMIN_LOGOUT_PATH, ADMIN_HOME_PATH }[value]
-        : value;
-      expect(resolved, `route injectée hors namespace admin : ${value}`).toMatch(
-        /^\/admin(\/|$)/,
+      // Toute route injectée passe par une constante déclarée dans
+      // admin-routes.ts — jamais de littéral ni de constante locale.
+      expect(adminRoutes, `route injectée hors admin-routes.ts : ${pattern}`).toHaveProperty(
+        pattern,
       );
+      const value = (adminRoutes as Record<string, unknown>)[pattern];
+      expect(typeof value, `constante inattendue : ${pattern}`).toBe('string');
+      expect(
+        value as string,
+        `route injectée hors namespace admin : ${pattern}`,
+      ).toMatch(/^\/admin(\/|$)/);
     }
+  });
+
+  it('la route spike du slice 0 est supprimée — plus aucune route injectée hors /admin', () => {
+    // Le pattern exact ne doit plus exister nulle part (mention historique
+    // dans un commentaire admise, route interdite).
+    expect(integrationSource).not.toContain('/api/kreiz/spike');
+    expect(existsSyncSpikeRoute()).toBe(false);
   });
 
   it('l’intégration n’injecte aucune route admin en dur hors constantes', () => {
@@ -91,3 +103,11 @@ describe('invariant namespace admin — routes authentifiées sous /admin/*', ()
     expect(clear.path).not.toBe('/');
   });
 });
+
+function existsSyncSpikeRoute(): boolean {
+  try {
+    return existsSync(fileURLToPath(new URL('../src/routes', import.meta.url)));
+  } catch {
+    return false;
+  }
+}

@@ -1,0 +1,223 @@
+---
+export const prerender = false;
+
+import AdminShell from '../../components/AdminShell.astro';
+import ContentFormFields from '../../components/ContentFormFields.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import {
+  ADMIN_CONTENT_INDEX_PATH,
+  ADMIN_LOGIN_PATH,
+  adminContentDeletePath,
+  adminContentTypePath,
+  adminPreviewPath,
+} from '../../../http/admin-routes.js';
+import { CSRF_FORM_FIELD, verifySessionCsrfToken } from '../../../http/csrf.js';
+import { parseContentForm, type FormFieldValue } from '../../../http/content-form.js';
+import { isTrustedSameSiteMutation } from '../../../http/mutations.js';
+import {
+  authenticateContentPage,
+  formValuesFromData,
+  mergeContentFieldErrors,
+} from '../../lib/content-page.js';
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+const typeKey = Astro.params.type ?? '';
+const entryId = Astro.params.id ?? '';
+const declaration = access.runtime.content.registry.findByKey(typeKey);
+
+// Chargement (GET comme POST) : contenu non supprimé, déclaration résolue
+// depuis l'entrée. L'isolation des types est vérifiée ici : un Article n'est
+// jamais éditable via une route Guide (mission §35) — 404, sans détail.
+type LoadedEntry = Awaited<ReturnType<typeof access.runtime.content.getContentForEdit>>;
+let loaded: LoadedEntry | null = null;
+let errorStatus: number | null = null;
+let errorKind: 'not-found' | 'deleted' | null = null;
+
+if (!declaration) {
+  errorStatus = 404;
+} else {
+  try {
+    const result = await access.runtime.content.getContentForEdit(entryId);
+    if (result.entry.contentType !== declaration.key) {
+      // Mauvais type dans l'URL : même réponse qu'un contenu absent.
+      errorStatus = 404;
+      errorKind = 'not-found';
+    } else {
+      loaded = result;
+    }
+  } catch (error) {
+    const name = (error as { name?: string }).name;
+    if (name === 'ContentDeletedError') {
+      errorStatus = 410;
+      errorKind = 'deleted';
+    } else {
+      errorStatus = 404;
+      errorKind = 'not-found';
+    }
+  }
+}
+if (errorStatus !== null) {
+  Astro.response.status = errorStatus;
+}
+
+// État du formulaire (re-rendu fidèle en cas d'erreur de validation).
+let formTitle = loaded?.entry.title ?? '';
+let formSlug = loaded?.entry.slug ?? '';
+let fieldValues: Record<string, FormFieldValue> = formValuesFromData(
+  declaration?.fields ?? {},
+  loaded?.entry.data ?? {},
+);
+let fieldErrors: Record<string, string> = {};
+let formError: string | null = null;
+const saved = Astro.url.searchParams.get('saved') === '1';
+
+if (loaded && Astro.request.method === 'POST') {
+  // Mutations : même protection que le slice 2 (same-site + CSRF lié à la
+  // session), vérifiées avant toute action — jamais un deuxième système.
+  if (!isTrustedSameSiteMutation(Astro.request)) {
+    formError = 'Requête refusée.';
+    Astro.response.status = 403;
+  } else {
+    let formData: FormData;
+    let csrfSubmitted: FormDataEntryValue | null = null;
+    try {
+      formData = await Astro.request.formData();
+      csrfSubmitted = formData.get(CSRF_FORM_FIELD);
+    } catch {
+      formError = 'Requête refusée.';
+      Astro.response.status = 403;
+    }
+
+    if (
+      formError === null &&
+      !verifySessionCsrfToken(access.sessionToken, typeof csrfSubmitted === 'string' ? csrfSubmitted : null)
+    ) {
+      formError = 'Requête refusée.';
+      Astro.response.status = 403;
+    }
+
+    if (formError === null) {
+      const parsed = parseContentForm(declaration!, formData);
+      formTitle = parsed.title;
+      formSlug = parsed.slug;
+      fieldValues = parsed.values;
+      const outcome = await access.runtime.content.updateDraft({
+        entryId,
+        title: parsed.title,
+        slug: parsed.slug.length > 0 ? parsed.slug : undefined,
+        data: parsed.data,
+        actorAdminId: access.access.admin.id,
+      });
+      if (outcome.kind === 'updated') {
+        // Retour sur l'édition avec le bandeau de confirmation — pas de
+        // re-rendu POST (F5 sans reproposer la soumission).
+        const redirectUrl = new URL(Astro.request.url);
+        redirectUrl.search = '?saved=1';
+        return Astro.redirect(redirectUrl.pathname + redirectUrl.search, 303);
+      }
+      fieldErrors = mergeContentFieldErrors(parsed.errors, outcome.errors);
+      Astro.response.status = 400;
+    }
+  }
+}
+---
+
+<AdminShell
+  title={loaded ? loaded.entry.title : 'Contenu'}
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  {
+    errorKind === 'not-found' ? (
+      <MessagePanel
+        title="Contenu introuvable"
+        description="Ce contenu n'existe pas ou ce type n'est pas déclaré par le projet."
+        backHref={declaration ? adminContentTypePath(declaration.key) : ADMIN_CONTENT_INDEX_PATH}
+        backLabel="Retour au contenu"
+      />
+    ) : errorKind === 'deleted' ? (
+      <MessagePanel
+        title="Contenu supprimé"
+        description="Ce contenu a été supprimé."
+        backHref={declaration ? adminContentTypePath(declaration.key) : ADMIN_CONTENT_INDEX_PATH}
+        backLabel="Retour au contenu"
+      />
+    ) : (
+      loaded && (
+        <>
+          {saved && (
+            <div class="kz-banner kz-banner--success" role="status">
+              Brouillon enregistré.
+            </div>
+          )}
+          <div class="kz-page-actions kz-page-actions--spread">
+            <a class="kz-button kz-button--ghost" href={adminPreviewPath(entryId)}>
+              Preview
+            </a>
+            <form method="post" action={adminContentDeletePath(declaration.key, entryId)}>
+              <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+              <button class="kz-button kz-button--danger" type="submit">Supprimer</button>
+            </form>
+          </div>
+          <form class="kz-form" method="post" novalidate>
+            {formError && (
+              <p class="kz-alert" role="alert">
+                {formError}
+              </p>
+            )}
+            <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+
+            <div class="kz-field">
+              <label class="kz-label" for="kz-title">
+                Titre<span class="kz-required" aria-hidden="true"> *</span>
+              </label>
+              <input
+                class="kz-input"
+                type="text"
+                id="kz-title"
+                name="title"
+                value={formTitle}
+                required
+                aria-invalid={fieldErrors.title ? 'true' : undefined}
+              />
+              {fieldErrors.title && <p class="kz-field-error" role="alert">{fieldErrors.title}</p>}
+            </div>
+
+            <div class="kz-field">
+              <label class="kz-label" for="kz-slug">Slug</label>
+              <p class="kz-help">
+                Adresse publique : /{declaration.routeNamespace}/{formSlug || '…'} — lettres minuscules, chiffres et tirets.
+              </p>
+              <input
+                class="kz-input"
+                type="text"
+                id="kz-slug"
+                name="slug"
+                value={formSlug}
+                autocomplete="off"
+                aria-invalid={fieldErrors.slug ? 'true' : undefined}
+              />
+              {fieldErrors.slug && <p class="kz-field-error" role="alert">{fieldErrors.slug}</p>}
+            </div>
+
+            <ContentFormFields fields={declaration.fields} values={fieldValues} errors={fieldErrors} />
+
+            {fieldErrors['_form'] && <p class="kz-alert" role="alert">{fieldErrors['_form']}</p>}
+
+            <div class="kz-form-actions">
+              <a class="kz-button kz-button--ghost" href={adminContentTypePath(declaration.key)}>
+                Retour au listing
+              </a>
+              <button class="kz-button" type="submit">Enregistrer le brouillon</button>
+            </div>
+          </form>
+        </>
+      )
+    )
+  }
+</AdminShell>

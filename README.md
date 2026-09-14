@@ -12,11 +12,14 @@ engine; each project provides branding, content types, templates and wording.
 
 **Early development / pre-release.** Kreiz is not ready for general production use yet.
 The repository currently contains the slice 0 foundation (monorepo, tooling, CI and the
-Astro integration spike), the slice 1 data foundations (Neon/Drizzle schema owned by the
-consuming app, server connection layer, first domain repositories) and the slice 2 admin
-authentication layer (Argon2id credentials, revocable server-side sessions, guards, CSRF,
-login rate limiting, append-only audit, the `kreiz` CLI and the `/admin` shell). Features
-listed in the roadmap below that are not covered by these slices are planned, not shipped.
+Astro integration), the slice 1 data foundations (Neon/Drizzle schema owned by the consuming
+app, server connection layer, first domain repositories), the slice 2 admin authentication
+layer (Argon2id credentials, revocable server-side sessions, guards, CSRF, login rate
+limiting, append-only audit, the `kreiz` CLI and the `/admin` shell) and the slice 3 content
+engine (code-declared content types, generic admin CRUD with generated forms, slugs with
+route namespaces, draft management, soft delete, content audit and SSR preview rendering the
+project's real templates). Features listed in the roadmap below that are not covered by
+these slices are planned, not shipped.
 
 ## Current architecture
 
@@ -24,16 +27,24 @@ listed in the roadmap below that are not covered by these slices are planned, no
   [`apps/demo`](apps/demo), a reference consumer of the package's public API only
 - Astro 7, TypeScript strict, Tailwind CSS 4, Vue islands where interactivity earns its cost
 - The core ships an Astro integration: admin and API routes are injected into the host app
-  via `injectRoute()` (`/admin/login`, `/admin`, `/admin/logout` — all SSR, no admin
-  plumbing is written by the consuming project)
+  via `injectRoute()` (`/admin/login`, `/admin`, `/admin/logout`, content CRUD under
+  `/admin/content/*`, `/admin/preview/[id]` — all SSR, no admin plumbing is written by the
+  consuming project)
 - Authentication: email + Argon2id (OWASP parameters), server-side revocable sessions
   (raw token only in a hardened cookie, SHA-256 in the database), sliding 14-day expiry
   with a 90-day absolute cap, login rate limiting on PostgreSQL, session-bound CSRF,
   append-only audit log
+- Content engine: content types declared in code by the project
+  (`defineContentType()` from `@kreiz/core/content`), a bounded field vocabulary
+  (text, textarea, select, url, date, metric, list), server-derived Zod validation of the
+  `data` JSONB, generated admin forms (progressive HTML, no JS), server-enforced route
+  namespaces, slug generation with collision handling, draft CRUD with soft delete,
+  content audit events, and an authenticated SSR preview that renders the project's real
+  templates — the same components the prerendered public pages use
 - The `kreiz` CLI creates the first admin and resets passwords (`admin:create`,
   `admin:reset-password`)
 - Project → core configuration flows through a typed Vite virtual module,
-  `virtual:kreiz/config`
+  `virtual:kreiz/config` (configuration data + statically imported template components)
 - The package's public surface is enforced mechanically by its `exports` map — deep
   imports fail typecheck
 

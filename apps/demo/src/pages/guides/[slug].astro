@@ -1,0 +1,23 @@
+---
+import { createContentReader } from '@kreiz/core/content';
+import { guideType } from '../../content-types/guide.js';
+import GuideContent from '../../templates/GuideContent.astro';
+
+export const prerender = true;
+
+/**
+ * Page publique `/guides/[slug]` — prérendue au build, même template que la
+ * preview SSR. 0 page tant qu'aucun guide n'est publié (option A, mission §22).
+ */
+export async function getStaticPaths() {
+  const databaseUrl = process.env.KREIZ_DATABASE_URL;
+  if (!databaseUrl) return [];
+  const reader = createContentReader({ databaseUrl });
+  const views = await reader.listPublishedViews({ declaration: guideType });
+  return views.map((view) => ({ params: { slug: view.slug }, props: { view } }));
+}
+
+const { view } = Astro.props;
+---
+
+<GuideContent view={view} />

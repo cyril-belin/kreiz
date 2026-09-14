@@ -1,0 +1,183 @@
+---
+export const prerender = false;
+
+import type { FieldDescriptor } from '../../domain/content/fields.js';
+import type { FormFieldValue } from '../../http/content-form.js';
+
+/**
+ * Rendu admin des champs d'un type de contenu — généré depuis la
+ * déclaration (mission §18). Ce n'est **pas** un form builder universel :
+ * chaque descripteur ne produit que le rendu dont Kreiz a besoin, sobre et
+ * sans JavaScript (formulaires progressifs). Les erreurs viennent de la
+ * validation serveur (parseur + schéma Zod), jamais du navigateur seul.
+ *
+ * Conventions de nommage (parseur `http/content-form.ts`) :
+ * - champ scalaire : `name` ;
+ * - métrique : `name:label` / `name:value` ;
+ * - liste : plusieurs `name` (ou paires `name:label` / `name:value`).
+ */
+interface Props {
+  fields: Record<string, FieldDescriptor>;
+  values: Record<string, FormFieldValue>;
+  errors: Record<string, string>;
+}
+
+const { fields, values, errors } = Astro.props;
+
+function stringValue(field: FormFieldValue | undefined, fallback = ''): string {
+  return field?.kind === 'string' ? field.value : fallback;
+}
+
+function metricValue(field: FormFieldValue | undefined): { label: string; value: string } {
+  return field?.kind === 'metric'
+    ? { label: field.label, value: field.value }
+    : { label: '', value: '' };
+}
+
+function listStringItems(field: FormFieldValue | undefined): string[] {
+  const items = field?.kind === 'list-string' ? field.items : [];
+  return [...items, '', '', '']; // lignes vides supplémentaires : ajout sans JavaScript
+}
+
+function listMetricItems(
+  field: FormFieldValue | undefined,
+): Array<{ label: string; value: string }> {
+  const items = field?.kind === 'list-metric' ? field.items : [];
+  return [...items, { label: '', value: '' }, { label: '', value: '' }];
+}
+---
+
+{
+  Object.entries(fields).map(([name, descriptor]) => {
+    const error = errors[name];
+    const fieldId = `kz-field-${name}`;
+    return (
+      <div class="kz-field">
+        <label class="kz-label" for={descriptor.kind === 'list' ? undefined : fieldId}>
+          {descriptor.label}
+          {descriptor.required ? <span class="kz-required" aria-hidden="true"> *</span> : null}
+        </label>
+        {descriptor.help && <p class="kz-help">{descriptor.help}</p>}
+        {descriptor.kind === 'text' && (
+          <input
+            class="kz-input"
+            type="text"
+            id={fieldId}
+            name={name}
+            value={stringValue(values[name])}
+            maxlength={descriptor.maxLength ?? 200}
+            aria-invalid={error ? 'true' : undefined}
+          />
+        )}
+        {descriptor.kind === 'textarea' && (
+          <textarea
+            class="kz-input kz-textarea"
+            id={fieldId}
+            name={name}
+            maxlength={descriptor.maxLength ?? 20000}
+            rows={8}
+            aria-invalid={error ? 'true' : undefined}
+          >{stringValue(values[name])}</textarea>
+        )}
+        {descriptor.kind === 'url' && (
+          <input
+            class="kz-input"
+            type="url"
+            id={fieldId}
+            name={name}
+            value={stringValue(values[name])}
+            placeholder={descriptor.placeholder}
+            aria-invalid={error ? 'true' : undefined}
+          />
+        )}
+        {descriptor.kind === 'date' && (
+          <input
+            class="kz-input"
+            type="date"
+            id={fieldId}
+            name={name}
+            value={stringValue(values[name])}
+            aria-invalid={error ? 'true' : undefined}
+          />
+        )}
+        {descriptor.kind === 'select' && (
+          <select class="kz-input" id={fieldId} name={name} aria-invalid={error ? 'true' : undefined}>
+            <option value="">— Choisir —</option>
+            {descriptor.choices.map((choice) => (
+              <option
+                value={choice.value}
+                selected={stringValue(values[name]) === choice.value ? true : undefined}
+              >
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        )}
+        {descriptor.kind === 'metric' && (
+          <div class="kz-metric">
+            <input
+              class="kz-input"
+              type="text"
+              id={fieldId}
+              name={`${name}:label`}
+              value={metricValue(values[name]).label}
+              placeholder="Libellé"
+              aria-label={`${descriptor.label} — libellé`}
+            />
+            <input
+              class="kz-input"
+              type="text"
+              name={`${name}:value`}
+              value={metricValue(values[name]).value}
+              placeholder="Valeur"
+              aria-label={`${descriptor.label} — valeur`}
+            />
+          </div>
+        )}
+        {descriptor.kind === 'list' && descriptor.item.kind === 'text' && (
+          <div class="kz-list">
+            {listStringItems(values[name]).map((item) => (
+              <input
+                class="kz-input"
+                type="text"
+                name={name}
+                value={item}
+                maxlength={descriptor.item.kind === 'text' ? (descriptor.item.maxLength ?? 200) : undefined}
+                aria-label={`${descriptor.label} — élément`}
+              />
+            ))}
+          </div>
+        )}
+        {descriptor.kind === 'list' && descriptor.item.kind === 'metric' && (
+          <div class="kz-list">
+            {listMetricItems(values[name]).map((row) => (
+              <div class="kz-metric">
+                <input
+                  class="kz-input"
+                  type="text"
+                  name={`${name}:label`}
+                  value={row.label}
+                  placeholder="Libellé"
+                  aria-label={`${descriptor.label} — libellé`}
+                />
+                <input
+                  class="kz-input"
+                  type="text"
+                  name={`${name}:value`}
+                  value={row.value}
+                  placeholder="Valeur"
+                  aria-label={`${descriptor.label} — valeur`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        {error && (
+          <p class="kz-field-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  })
+}

@@ -1,0 +1,64 @@
+---
+export const prerender = false;
+
+import AdminShell from '../../components/AdminShell.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import { ADMIN_LOGIN_PATH, adminContentNewPath, adminContentTypePath } from '../../../http/admin-routes.js';
+import { authenticateContentPage } from '../../lib/content-page.js';
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+const { content } = access.runtime;
+const registry = content.registry;
+const types = await Promise.all(
+  registry.list().map(async (declaration) => {
+    const entries = await content.listContent(declaration.key);
+    return { declaration, count: entries.length };
+  }),
+);
+---
+
+<AdminShell
+  title="Contenu"
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  {
+    types.length === 0 ? (
+      <MessagePanel
+        tone="info"
+        title="Aucun type de contenu déclaré"
+        description="Ce projet n'a déclaré aucun type de contenu auprès de Kreiz. Déclarez vos types avec defineContentType() dans la configuration du projet."
+        backHref="/admin"
+        backLabel="Retour au dashboard"
+      />
+    ) : (
+      types.map(({ declaration, count }) => (
+        <section class="kz-panel kz-content-card" aria-labelledby={`kz-type-${declaration.key}`}>
+          <div class="kz-content-card__main">
+            <h2 class="kz-panel__title" id={`kz-type-${declaration.key}`}>
+              {declaration.labelPlural}
+            </h2>
+            <p class="kz-panel__text">
+              {count === 0
+                ? 'Aucun contenu pour le moment.'
+                : `${count} contenu${count > 1 ? 's' : ''} — /${declaration.routeNamespace}/[slug]`}
+            </p>
+          </div>
+          <div class="kz-content-card__actions">
+            <a class="kz-button kz-button--ghost" href={adminContentTypePath(declaration.key)}>
+              Voir
+            </a>
+            <a class="kz-button" href={adminContentNewPath(declaration.key)}>
+              Nouveau
+            </a>
+          </div>
+        </section>
+      ))
+    )
+  }
+</AdminShell>

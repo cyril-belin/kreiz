@@ -1,0 +1,24 @@
+---
+import { createContentReader } from '@kreiz/core/content';
+import { caseStudyType } from '../../content-types/case-study.js';
+import CaseStudyContent from '../../templates/CaseStudyContent.astro';
+
+export const prerender = true;
+
+/**
+ * Page publique `/realisations/[slug]` — prérendue au build, même template
+ * que la preview SSR. 0 page tant qu'aucune réalisation n'est publiée
+ * (option A, mission §22).
+ */
+export async function getStaticPaths() {
+  const databaseUrl = process.env.KREIZ_DATABASE_URL;
+  if (!databaseUrl) return [];
+  const reader = createContentReader({ databaseUrl });
+  const views = await reader.listPublishedViews({ declaration: caseStudyType });
+  return views.map((view) => ({ params: { slug: view.slug }, props: { view } }));
+}
+
+const { view } = Astro.props;
+---
+
+<CaseStudyContent view={view} />

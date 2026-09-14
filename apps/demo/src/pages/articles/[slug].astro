@@ -1,0 +1,32 @@
+---
+import { createContentReader } from '@kreiz/core/content';
+import { articleType } from '../../content-types/article.js';
+import ArticleContent from '../../templates/ArticleContent.astro';
+
+export const prerender = true;
+
+/**
+ * Page publique `/articles/[slug]` — prérendue au build (cadrage §9 :
+ * zéro requête Neon au moment de servir). Le contenu vient du lecteur de
+ * build du Core ; **le même template** `ArticleContent.astro` que la
+ * preview SSR (`/admin/preview/[id]`) est utilisé — preuve du rendu public
+ * partagé (mission §22/§23).
+ *
+ * Option A (mission §22) : aucune publication n'existe au slice 3, le
+ * build émet donc **0 page dynamique** tant qu'aucun contenu n'est
+ * `published`. Sans `KREIZ_DATABASE_URL` au build (ex. PR de fork), les
+ * routes restent vides plutôt que d'échouer : le site public ne dépend
+ * d'aucune base pour être servi.
+ */
+export async function getStaticPaths() {
+  const databaseUrl = process.env.KREIZ_DATABASE_URL;
+  if (!databaseUrl) return [];
+  const reader = createContentReader({ databaseUrl });
+  const views = await reader.listPublishedViews({ declaration: articleType });
+  return views.map((view) => ({ params: { slug: view.slug }, props: { view } }));
+}
+
+const { view } = Astro.props;
+---
+
+<ArticleContent view={view} />

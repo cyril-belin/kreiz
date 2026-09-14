@@ -1,0 +1,121 @@
+---
+export const prerender = false;
+
+import type { KreizContentEntry } from '../../../data/tables/content-entries.js';
+import AdminShell from '../../components/AdminShell.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import {
+  ADMIN_CONTENT_INDEX_PATH,
+  ADMIN_LOGIN_PATH,
+  adminContentDeletePath,
+  adminContentEditPath,
+  adminContentNewPath,
+} from '../../../http/admin-routes.js';
+import { CSRF_FORM_FIELD } from '../../../http/csrf.js';
+import { authenticateContentPage } from '../../lib/content-page.js';
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+// Le type vient de l'URL mais n'est jamais cru seul : il doit correspondre
+// à une déclaration du registre (mission §19).
+const typeKey = Astro.params.type ?? '';
+const declaration = access.runtime.content.registry.findByKey(typeKey);
+
+let entries: KreizContentEntry[] = [];
+if (declaration) {
+  entries = await access.runtime.content.listContent(declaration.key);
+}
+
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const statusLabels: Record<string, string> = { draft: 'Brouillon', published: 'Publié' };
+---
+
+<AdminShell
+  title={declaration ? declaration.labelPlural : 'Contenu'}
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  {
+    !declaration ? (
+      <MessagePanel
+        title="Type de contenu introuvable"
+        description="Ce type n'est pas déclaré par le projet."
+        backHref={ADMIN_CONTENT_INDEX_PATH}
+        backLabel="Retour au contenu"
+      />
+    ) : (
+      <>
+        <div class="kz-page-actions">
+          <a class="kz-button" href={adminContentNewPath(declaration.key)}>
+            Nouveau {declaration.label.toLowerCase()}
+          </a>
+        </div>
+        {entries.length === 0 ? (
+          <MessagePanel
+            tone="info"
+            title={`Aucun ${declaration.label.toLowerCase()}`}
+            description="Créez le premier brouillon pour ce type de contenu."
+            backHref={adminContentNewPath(declaration.key)}
+            backLabel={`Créer un ${declaration.label.toLowerCase()}`}
+          />
+        ) : (
+          <div class="kz-table-wrapper">
+            <table class="kz-table">
+              <thead>
+                <tr>
+                  <th scope="col">Titre</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Slug</th>
+                  <th scope="col">Modifié</th>
+                  <th scope="col">
+                    <span class="kz-visually-hidden">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr>
+                    <td data-label="Titre">
+                      <a class="kz-table__link" href={adminContentEditPath(declaration.key, entry.id)}>
+                        {entry.title}
+                      </a>
+                    </td>
+                    <td data-label="Statut">
+                      <span class:list={['kz-badge', entry.status === 'draft' ? 'kz-badge--draft' : 'kz-badge--published']}>
+                        {statusLabels[entry.status] ?? entry.status}
+                      </span>
+                    </td>
+                    <td data-label="Slug">
+                      <code class="kz-slug">/{declaration.routeNamespace}/{entry.slug}</code>
+                    </td>
+                    <td data-label="Modifié">{dateFormatter.format(entry.updatedAt)}</td>
+                    <td data-label="Actions">
+                      <div class="kz-row-actions">
+                        <a
+                          class="kz-row-action"
+                          href={adminContentEditPath(declaration.key, entry.id)}
+                        >
+                          Éditer
+                        </a>
+                        <form method="post" action={adminContentDeletePath(declaration.key, entry.id)}>
+                          <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                          <button class="kz-row-action kz-row-action--danger" type="submit">
+                            Supprimer
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </>
+    )
+  }
+</AdminShell>

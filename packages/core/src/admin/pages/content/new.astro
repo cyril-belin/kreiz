@@ -1,0 +1,166 @@
+---
+export const prerender = false;
+
+import AdminShell from '../../components/AdminShell.astro';
+import ContentFormFields from '../../components/ContentFormFields.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import {
+  ADMIN_CONTENT_INDEX_PATH,
+  ADMIN_LOGIN_PATH,
+  adminContentEditPath,
+  adminContentNewPath,
+  adminContentTypePath,
+} from '../../../http/admin-routes.js';
+import { CSRF_FORM_FIELD, verifySessionCsrfToken } from '../../../http/csrf.js';
+import { parseContentForm, type FormFieldValue } from '../../../http/content-form.js';
+import { isTrustedSameSiteMutation } from '../../../http/mutations.js';
+import {
+  authenticateContentPage,
+  formValuesFromData,
+  mergeContentFieldErrors,
+} from '../../lib/content-page.js';
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+const typeKey = Astro.params.type ?? '';
+const declaration = access.runtime.content.registry.findByKey(typeKey);
+
+// État du formulaire (re-rendu fidèle en cas d'erreur de validation).
+let formTitle = '';
+let formSlug = '';
+let fieldValues: Record<string, FormFieldValue> = formValuesFromData(declaration?.fields ?? {}, {});
+let fieldErrors: Record<string, string> = {};
+let formError: string | null = null;
+
+if (!declaration) {
+  Astro.response.status = 404;
+}
+else if (Astro.request.method === 'POST') {
+  // Mutations : même protection que le slice 2 (same-site + CSRF lié à la
+  // session), vérifiées avant toute action — jamais un deuxième système.
+  if (!isTrustedSameSiteMutation(Astro.request)) {
+    formError = 'Requête refusée.';
+    Astro.response.status = 403;
+  } else {
+    let formData: FormData;
+    let csrfSubmitted: FormDataEntryValue | null = null;
+    try {
+      formData = await Astro.request.formData();
+      csrfSubmitted = formData.get(CSRF_FORM_FIELD);
+    } catch {
+      formError = 'Requête refusée.';
+      Astro.response.status = 403;
+    }
+
+    if (
+      formError === null &&
+      !verifySessionCsrfToken(
+        access.sessionToken,
+        typeof csrfSubmitted === 'string' ? csrfSubmitted : null,
+      )
+    ) {
+      formError = 'Requête refusée.';
+      Astro.response.status = 403;
+    }
+
+    if (formError === null) {
+      const parsed = parseContentForm(declaration, formData);
+      formTitle = parsed.title;
+      formSlug = parsed.slug;
+      fieldValues = parsed.values;
+      const outcome = await access.runtime.content.createDraft({
+        contentTypeKey: declaration.key,
+        title: parsed.title,
+        slug: parsed.slug.length > 0 ? parsed.slug : undefined,
+        data: parsed.data,
+        actorAdminId: access.access.admin.id,
+      });
+      if (outcome.kind === 'created') {
+        return Astro.redirect(adminContentEditPath(declaration.key, outcome.entry.id), 303);
+      }
+      fieldErrors = mergeContentFieldErrors(parsed.errors, outcome.errors);
+      Astro.response.status = 400;
+    }
+  }
+}
+---
+
+<AdminShell
+  title={declaration ? `Nouveau ${declaration.label.toLowerCase()}` : 'Contenu'}
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  {
+    !declaration ? (
+      <MessagePanel
+        title="Type de contenu introuvable"
+        description="Ce type n'est pas déclaré par le projet."
+        backHref={ADMIN_CONTENT_INDEX_PATH}
+        backLabel="Retour au contenu"
+      />
+    ) : (
+      <form class="kz-form" method="post" action={adminContentNewPath(declaration.key)} novalidate>
+        {formError && (
+          <p class="kz-alert" role="alert">
+            {formError}
+          </p>
+        )}
+        <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+
+        <div class="kz-field">
+          <label class="kz-label" for="kz-title">
+            Titre<span class="kz-required" aria-hidden="true"> *</span>
+          </label>
+          <input
+            class="kz-input"
+            type="text"
+            id="kz-title"
+            name="title"
+            value={formTitle}
+            required
+            aria-invalid={fieldErrors.title ? 'true' : undefined}
+          />
+          {fieldErrors.title && (
+            <p class="kz-field-error" role="alert">{fieldErrors.title}</p>
+          )}
+        </div>
+
+        <div class="kz-field">
+          <label class="kz-label" for="kz-slug">Slug</label>
+          <p class="kz-help">
+            Laisser vide pour générer depuis le titre (/{declaration.routeNamespace}/…). Éditable ensuite.
+          </p>
+          <input
+            class="kz-input"
+            type="text"
+            id="kz-slug"
+            name="slug"
+            value={formSlug}
+            autocomplete="off"
+            aria-invalid={fieldErrors.slug ? 'true' : undefined}
+          />
+          {fieldErrors.slug && (
+            <p class="kz-field-error" role="alert">{fieldErrors.slug}</p>
+          )}
+        </div>
+
+        <ContentFormFields fields={declaration.fields} values={fieldValues} errors={fieldErrors} />
+
+        {fieldErrors['_form'] && (
+          <p class="kz-alert" role="alert">{fieldErrors['_form']}</p>
+        )}
+
+        <div class="kz-form-actions">
+          <a class="kz-button kz-button--ghost" href={adminContentTypePath(declaration.key)}>
+            Annuler
+          </a>
+          <button class="kz-button" type="submit">Enregistrer le brouillon</button>
+        </div>
+      </form>
+    )
+  }
+</AdminShell>

@@ -1,0 +1,125 @@
+---
+export const prerender = false;
+
+import '../styles/admin.css';
+import { ADMIN_HOME_PATH, ADMIN_LOGOUT_PATH, adminContentTypePath } from '../../http/admin-routes.js';
+import type { KreizAdminUser } from '../../data/tables/admin-users.js';
+import { CSRF_FORM_FIELD } from '../../http/csrf.js';
+import { getContentRegistry } from '../../content/runtime.js';
+
+/**
+ * Shell partagé du back-office (slice 3 : extrait du dashboard du slice 2).
+ *
+ * La section « Contenu » est **générée depuis le registre des types** fourni
+ * par le Project via `virtual:kreiz/config` (mission §25) : le Core ne
+ * hardcode aucun Article/Guide/Case Study — un autre Project déclare ses
+ * propres types et la navigation suit. Les sections non livrées restent
+ * explicitement « Bientôt » (pas de fausses pages).
+ */
+interface Props {
+  title: string;
+  admin: KreizAdminUser;
+  csrfToken: string;
+  /** Chemin courant (Astro.url.pathname) pour l'état actif de la navigation. */
+  currentPath: string;
+}
+
+const { title, admin, csrfToken, currentPath } = Astro.props;
+
+const contentTypes = getContentRegistry().list();
+
+type NavItem = { label: string; href: string | null; current: boolean; disabled: boolean };
+type NavSection = { label: string | null; items: NavItem[] };
+
+const navSections: NavSection[] = [
+  {
+    label: null,
+    items: [{ label: 'Dashboard', href: ADMIN_HOME_PATH, current: currentPath === ADMIN_HOME_PATH, disabled: false }],
+  },
+  {
+    label: 'Contenu',
+    items: contentTypes.map((type) => ({
+      label: type.labelPlural,
+      href: adminContentTypePath(type.key),
+      current:
+        currentPath === adminContentTypePath(type.key) ||
+        currentPath.startsWith(`${adminContentTypePath(type.key)}/`),
+      disabled: false,
+    })),
+  },
+  {
+    label: 'Commercial',
+    items: [{ label: 'Contacts', href: null, current: false, disabled: true }],
+  },
+  {
+    label: 'Analyse',
+    items: [{ label: 'Analytics', href: null, current: false, disabled: true }],
+  },
+].filter((section) => section.items.length > 0);
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} — Kreiz</title>
+  </head>
+  <body>
+    <div class="kz-shell">
+      <aside class="kz-sidebar">
+        <p class="kz-sidebar__brand">Kreiz <small>Back-office</small></p>
+        <nav class="kz-nav" aria-label="Navigation principale">
+          {
+            navSections.map((section) => (
+              <>
+                {section.label && <p class="kz-nav__section">{section.label}</p>}
+                {section.items.map((item) =>
+                  item.disabled ? (
+                    <span
+                      class="kz-nav__link kz-nav__link--disabled"
+                      aria-disabled="true"
+                      title="Module à venir"
+                    >
+                      {item.label}
+                      <span class="kz-nav__badge">Bientôt</span>
+                    </span>
+                  ) : (
+                    <a
+                      class="kz-nav__link"
+                      href={item.href ?? '#'}
+                      aria-current={item.current ? 'page' : undefined}
+                    >
+                      {item.label}
+                    </a>
+                  ),
+                )}
+              </>
+            ))
+          }
+        </nav>
+      </aside>
+
+      <div class="kz-main">
+        <header class="kz-topbar">
+          <h1 class="kz-topbar__title">{title}</h1>
+          <div class="kz-user">
+            <p class="kz-user__meta">
+              <span class="kz-user__name">{admin.name}</span><br />
+              <span class="kz-user__email">{admin.email}</span>
+            </p>
+            <form method="post" action={ADMIN_LOGOUT_PATH}>
+              <input type="hidden" name={CSRF_FORM_FIELD} value={csrfToken} />
+              <button class="kz-button kz-button--ghost" type="submit">Se déconnecter</button>
+            </form>
+          </div>
+        </header>
+
+        <main class="kz-content">
+          <slot />
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

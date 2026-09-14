@@ -14,6 +14,10 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  // Un seul worker : les specs partagent une base réelle et un admin commun —
+  // deux fichiers en parallèle s'invalident mutuellement (ex. la révocation
+  // des sessions du slice 2 tirerait au milieu d'un parcours contenu).
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'line' : 'list',
   globalSetup: './e2e/global-setup.ts',

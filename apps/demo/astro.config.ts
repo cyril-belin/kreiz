@@ -2,10 +2,12 @@ import vercel from '@astrojs/vercel';
 import tailwindcss from '@tailwindcss/vite';
 import { kreiz } from '@kreiz/core';
 import { defineConfig } from 'astro/config';
+import { articleType, guideType, caseStudyType } from './src/content-types/index.js';
 
 // apps/demo est un consommateur EXTERNE de @kreiz/core : seule l'API publique
-// du package est utilisée. L'intégration injecte les routes du Core
-// (/admin/login, /admin, /admin/logout — SSR) et la route de spike.
+// du package est utilisée. L'intégration injecte les routes du Core (login,
+// shell, CRUD contenu, preview — toutes SSR sous /admin) et reçoit ici les
+// types de contenu déclarés par le projet (mission §3) avec leurs templates.
 export default defineConfig({
   output: 'static',
   adapter: vercel(),
@@ -28,7 +30,9 @@ export default defineConfig({
   devToolbar: { enabled: false },
   integrations: [
     kreiz({
-      spike: { message: 'config fournie par apps/demo' },
+      content: {
+        types: [articleType, guideType, caseStudyType],
+      },
     }),
   ],
   vite: {
