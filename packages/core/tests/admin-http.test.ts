@@ -276,6 +276,7 @@ describe('environnement admin runtime', () => {
     expect(parseKreizAdminEnv(validEnv)).toEqual({
       databaseUrl: validEnv.KREIZ_DATABASE_URL,
       secret: validEnv.KREIZ_SECRET,
+      storage: null,
       rebuildHookUrl: null,
     });
   });

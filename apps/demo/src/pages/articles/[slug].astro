@@ -21,7 +21,10 @@ export const prerender = true;
 export async function getStaticPaths() {
   const databaseUrl = process.env.KREIZ_DATABASE_URL;
   if (!databaseUrl) return [];
-  const reader = createContentReader({ databaseUrl });
+  const reader = createContentReader({
+    databaseUrl,
+    mediaPublicBaseUrl: process.env.KREIZ_STORAGE_PUBLIC_BASE_URL ?? null,
+  });
   const views = await reader.listPublishedViews({ declaration: articleType });
   return views.map((view) => ({ params: { slug: view.slug }, props: { view } }));
 }

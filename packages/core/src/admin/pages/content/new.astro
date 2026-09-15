@@ -3,6 +3,7 @@ export const prerender = false;
 
 import AdminShell from '../../components/AdminShell.astro';
 import ContentFormFields from '../../components/ContentFormFields.astro';
+import CoverPicker from '../../components/CoverPicker.astro';
 import MessagePanel from '../../components/MessagePanel.astro';
 import {
   ADMIN_CONTENT_INDEX_PATH,
@@ -31,9 +32,15 @@ const declaration = access.runtime.content.registry.findByKey(typeKey);
 // État du formulaire (re-rendu fidèle en cas d'erreur de validation).
 let formTitle = '';
 let formSlug = '';
+let formCoverMediaId: string | null = null;
 let fieldValues: Record<string, FormFieldValue> = formValuesFromData(declaration?.fields ?? {}, {});
 let fieldErrors: Record<string, string> = {};
 let formError: string | null = null;
+
+// Pickers de couverture : médias `ready` uniquement (mission §29).
+const readyMedia = access.runtime.mediaAdmin
+  ? (await access.runtime.mediaAdmin.listReady()).map((media) => ({ id: media.id, alt: media.altText }))
+  : [];
 
 if (!declaration) {
   Astro.response.status = 404;
@@ -70,12 +77,14 @@ else if (Astro.request.method === 'POST') {
       const parsed = parseContentForm(declaration, formData);
       formTitle = parsed.title;
       formSlug = parsed.slug;
+      formCoverMediaId = parsed.coverMediaId;
       fieldValues = parsed.values;
       const outcome = await access.runtime.content.createDraft({
         contentTypeKey: declaration.key,
         title: parsed.title,
         slug: parsed.slug.length > 0 ? parsed.slug : undefined,
         data: parsed.data,
+        coverMediaId: parsed.coverMediaId,
         actorAdminId: access.access.admin.id,
       });
       if (outcome.kind === 'created') {
@@ -149,6 +158,13 @@ else if (Astro.request.method === 'POST') {
         </div>
 
         <ContentFormFields fields={declaration.fields} values={fieldValues} errors={fieldErrors} />
+
+        <CoverPicker
+          readyMedia={readyMedia}
+          selectedMediaId={formCoverMediaId}
+          selectedThumbnailUrl={null}
+          error={fieldErrors.cover}
+        />
 
         {fieldErrors['_form'] && (
           <p class="kz-alert" role="alert">{fieldErrors['_form']}</p>

@@ -1,0 +1,354 @@
+---
+export const prerender = false;
+
+import type { KreizMedia } from '../../../data/tables/media.js';
+import AdminShell from '../../components/AdminShell.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import {
+  ADMIN_MEDIA_UPLOAD_REQUEST_PATH,
+  adminMediaAltPath,
+  adminMediaDeletePath,
+  adminMediaRetryPath,
+} from '../../../http/admin-routes.js';
+import { CSRF_FORM_FIELD } from '../../../http/csrf.js';
+import { authenticateContentPage } from '../../lib/content-page.js';
+import { MEDIA_ACCEPTED_MIME_TYPES, MEDIA_MAX_UPLOAD_BYTES } from '../../../domain/media/policy.js';
+import { normalizeMediaPublicBaseUrl } from '../../../domain/media/view-model.js';
+
+/**
+ * Médiathèque (mission §32) — grille des médias, upload direct présigné,
+ * alt, retry, suppression. L'îlot JavaScript ciblé (mission §33 — « island
+ * Vue **ou JS** » ; vanilla choisi : aucune dépendance framework imposée
+ * aux consommateurs du Core) couvre uniquement le flux présigné → PUT
+ * direct → confirmation → polling ; tout le reste est du HTML progressif.
+ */
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect('/admin/login', 302);
+}
+
+const { runtime } = access;
+const storageConfigured = runtime.storage !== null && runtime.mediaAdmin !== null;
+
+let mediaRows: KreizMedia[] = [];
+if (storageConfigured) {
+  mediaRows = await runtime.mediaAdmin!.listForAdmin();
+}
+
+// URL de miniature : la plus petite variante WebP prête (serveur-résolue,
+// jamais l'original — privé, mission §42/§43).
+const publicBaseUrl = runtime.mediaPublicBaseUrl;
+function thumbnailUrl(row: KreizMedia): string | null {
+  if (row.status !== 'ready' || !publicBaseUrl) return null;
+  const webp = row.variants
+    .filter((variant) => variant.format === 'webp')
+    .sort((a, b) => a.width - b.width);
+  const best = webp[0] ?? row.variants[0];
+  return best ? `${normalizeMediaPublicBaseUrl(publicBaseUrl)}/${best.key}` : null;
+}
+
+const statusLabels: Record<KreizMedia['status'], string> = {
+  uploading: 'En attente',
+  processing: 'Traitement…',
+  ready: 'Prêt',
+  failed: 'Échec',
+};
+
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const sizeFormatter = new Intl.NumberFormat('fr-FR', { style: 'unit', unit: 'kilobyte', maximumFractionDigits: 0 });
+
+// Bandeaux de résultat des mutations (redirections 303).
+const altResult = Astro.url.searchParams.get('alt');
+const retryResult = Astro.url.searchParams.get('retry');
+const deleteResult = Astro.url.searchParams.get('delete');
+---
+
+<AdminShell
+  title="Médias"
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  {
+    !storageConfigured ? (
+      <MessagePanel
+        tone="info"
+        title="Stockage média non configuré"
+        description="Le pipeline média a besoin d'un stockage objet S3-compatible (R2, S3, MinIO) : définissez KREIZ_STORAGE_ENDPOINT, KREIZ_STORAGE_BUCKET, KREIZ_STORAGE_ACCESS_KEY_ID, KREIZ_STORAGE_SECRET_ACCESS_KEY et KREIZ_STORAGE_PUBLIC_BASE_URL dans l'environnement du projet."
+      />
+    ) : (
+      <>
+        {altResult === '1' && (
+          <div class="kz-banner kz-banner--success" role="status">Texte alternatif enregistré.</div>
+        )}
+        {altResult === 'missing' && (
+          <div class="kz-banner kz-banner--warning" role="alert">Média introuvable.</div>
+        )}
+        {retryResult === '1' && (
+          <div class="kz-banner kz-banner--success" role="status">Traitement relancé — le média repasse en cours de traitement.</div>
+        )}
+        {retryResult === 'invalid' && (
+          <div class="kz-banner kz-banner--warning" role="alert">Ce média n'est pas en échec — relance inutile.</div>
+        )}
+        {retryResult === 'missing' && (
+          <div class="kz-banner kz-banner--warning" role="alert">Média introuvable.</div>
+        )}
+        {deleteResult === '1' && (
+          <div class="kz-banner kz-banner--success" role="status">Média supprimé (fichiers du stockage inclus).</div>
+        )}
+        {deleteResult === 'in-use' && (
+          <div class="kz-banner kz-banner--warning" role="alert">
+            Suppression refusée : ce média est utilisé comme couverture par au moins un contenu. Retirez-le du contenu concerné avant de le supprimer.
+          </div>
+        )}
+        {deleteResult === 'missing' && (
+          <div class="kz-banner kz-banner--warning" role="alert">Média introuvable.</div>
+        )}
+
+        <section
+          class="kz-panel kz-media-upload"
+          aria-label="Ajouter un média"
+          data-kreiz-media-upload
+          data-csrf={access.access.csrfToken}
+          data-upload-endpoint={ADMIN_MEDIA_UPLOAD_REQUEST_PATH}
+        >
+          <div class="kz-media-upload__controls">
+            <label class="kz-label" for="kz-media-file">Ajouter une image</label>
+            <input
+              class="kz-input"
+              type="file"
+              id="kz-media-file"
+              accept={MEDIA_ACCEPTED_MIME_TYPES.join(',')}
+            />
+            <p class="kz-help">
+              JPEG, PNG, WebP ou AVIF — 20 Mo maximum. L'envoi part directement vers le stockage
+              (URL présignée), le serveur vérifie ensuite l'objet réel et génère les variantes.
+            </p>
+          </div>
+          <div class="kz-media-upload__actions">
+            <button class="kz-button" type="button" data-role="upload-button">Uploader</button>
+          </div>
+          <div class="kz-media-upload__state" data-role="state" hidden>
+            <progress data-role="progress" max="100" value="0"></progress>
+            <p class="kz-help" data-role="message"></p>
+          </div>
+        </section>
+
+        {mediaRows.length === 0 ? (
+          <MessagePanel
+            tone="info"
+            title="Aucun média"
+            description="Uploadez la première image pour l'utiliser comme couverture de contenu."
+          />
+        ) : (
+          <ul class="kz-media-grid" role="list">
+            {mediaRows.map((row) => (
+              <li class="kz-media-card" id={row.id}>
+                <div class="kz-media-card__preview">
+                  {thumbnailUrl(row) ? (
+                    <img
+                      src={thumbnailUrl(row) ?? ''}
+                      alt={row.altText}
+                      width="320"
+                      height="180"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <span class="kz-media-card__placeholder" aria-hidden="true" />
+                  )}
+                  <span
+                    class:list={[
+                      'kz-badge',
+                      row.status === 'ready'
+                        ? 'kz-badge--published'
+                        : row.status === 'failed'
+                          ? 'kz-badge--changed'
+                          : 'kz-badge--draft',
+                    ]}
+                  >
+                    {statusLabels[row.status]}
+                  </span>
+                </div>
+                <div class="kz-media-card__body">
+                  <p class="kz-media-card__meta">
+                    {row.mime} · {sizeFormatter.format(Math.max(1, Math.round(row.sizeBytes / 1024)))} ·{' '}
+                    {dateFormatter.format(row.createdAt)}
+                    {row.width && row.height && (
+                      <> · {row.width}×{row.height} px</>
+                    )}
+                    {row.variants.length > 0 && <> · {row.variants.length} variantes</>}
+                  </p>
+                  {row.status === 'failed' && row.failureReason && (
+                    <p class="kz-field-error">Raison : {row.failureReason}</p>
+                  )}
+                  <form class="kz-media-card__alt" method="post" action={adminMediaAltPath(row.id)}>
+                    <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                    <label class="kz-label" for={`alt-${row.id}`}>
+                      Texte alternatif<span class="kz-visually-hidden"> ({row.id})</span>
+                    </label>
+                    <input
+                      class="kz-input"
+                      type="text"
+                      id={`alt-${row.id}`}
+                      name="alt_text"
+                      value={row.altText}
+                      maxlength="1000"
+                      placeholder="Décrire l'image (vide = image décorative)"
+                    />
+                    <button class="kz-button kz-button--ghost" type="submit">Enregistrer le texte alternatif</button>
+                  </form>
+                  <div class="kz-row-actions">
+                    {row.status === 'failed' && (
+                      <form method="post" action={adminMediaRetryPath(row.id)}>
+                        <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                        <button class="kz-button" type="submit">Réessayer</button>
+                      </form>
+                    )}
+                    <form method="post" action={adminMediaDeletePath(row.id)}>
+                      <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                      <button class="kz-button kz-button--danger" type="submit">Supprimer</button>
+                    </form>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    )
+  }
+</AdminShell>
+
+<script>
+  /**
+   * Îlot upload (mission §33/§34/§35) : demande de présignature → PUT
+   * direct navigateur → stockage (progression 0–100 %) → confirmation
+   * serveur → polling du statut (arrêt sur ready/failed, timeout UX).
+   * Aucune dépendance ; le rendu final reste côté serveur (reload).
+   */
+  const root = document.querySelector('[data-kreiz-media-upload]');
+  if (root) {
+    const fileInput = root.querySelector<HTMLInputElement>('#kz-media-file');
+    const button = root.querySelector<HTMLButtonElement>('[data-role="upload-button"]');
+    const state = root.querySelector<HTMLElement>('[data-role="state"]');
+    const progress = root.querySelector<HTMLProgressElement>('[data-role="progress"]');
+    const message = root.querySelector<HTMLElement>('[data-role="message"]');
+    const csrf = (root as HTMLElement).dataset.csrf ?? '';
+    const uploadEndpoint = (root as HTMLElement).dataset.uploadEndpoint ?? '';
+
+    function show(messageText: string): void {
+      if (state && message) {
+        state.hidden = false;
+        message.textContent = messageText;
+      }
+    }
+
+    function reset(): void {
+      if (state && progress) {
+        state.hidden = true;
+        progress.value = 0;
+      }
+      if (button) button.disabled = false;
+    }
+
+    function poll(mediaId: string): void {
+      const started = Date.now();
+      const timer = window.setInterval(async () => {
+        if (Date.now() - started > 120_000) {
+          window.clearInterval(timer);
+          show('Le traitement prend trop de temps — rechargement de la médiathèque pour vérifier son état.');
+          window.setTimeout(() => window.location.reload(), 2000);
+          return;
+        }
+        try {
+          const response = await fetch(`/admin/media/${encodeURIComponent(mediaId)}/status`, {
+            headers: { accept: 'application/json' },
+          });
+          if (!response.ok) return; // statut transitoire : on retente
+          const body = (await response.json()) as { status: string };
+          if (body.status === 'ready' || body.status === 'failed') {
+            window.clearInterval(timer);
+            window.location.reload();
+          }
+        } catch {
+          // Erreur réseau transitoire : la prochaine itération retente.
+        }
+      }, 1500);
+    }
+
+    async function requestPresign(file: File): Promise<{ mediaId: string; upload: { url: string; method: string; headers: Record<string, string> } }> {
+      const response = await fetch(uploadEndpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          'x-kreiz-csrf-token': csrf,
+        },
+        body: JSON.stringify({ mime: file.type, sizeBytes: file.size }),
+      });
+      const body = (await response.json()) as Record<string, unknown> & {
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(String(body.message ?? body.error ?? 'upload-refused'));
+      }
+      return body as unknown as { mediaId: string; upload: { url: string; method: string; headers: Record<string, string> } };
+    }
+
+    function putDirectly(file: File, upload: { url: string; method: string; headers: Record<string, string> }): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(upload.method, upload.url);
+        for (const [name, value] of Object.entries(upload.headers)) {
+          xhr.setRequestHeader(name, value);
+        }
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable && progress) {
+            progress.value = Math.round((event.loaded / event.total) * 100);
+            show(`Envoi direct vers le stockage — ${progress.value} %`);
+          }
+        });
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`storage-refused-${xhr.status}`));
+        });
+        xhr.addEventListener('error', () => reject(new Error('storage-network')));
+        xhr.send(file);
+      });
+    }
+
+    button?.addEventListener('click', async () => {
+      const file = fileInput?.files?.[0];
+      if (!file) {
+        show('Choisissez d’abord une image.');
+        return;
+      }
+      if (button) button.disabled = true;
+      if (progress) progress.value = 0;
+      try {
+        show('Demande d’URL d’envoi…');
+        const presigned = await requestPresign(file);
+        await putDirectly(file, presigned.upload);
+        show('Vérification serveur de l’objet…');
+        const confirmResponse = await fetch(`/admin/media/${encodeURIComponent(presigned.mediaId)}/confirm`, {
+          method: 'POST',
+          headers: { accept: 'application/json', 'x-kreiz-csrf-token': csrf },
+        });
+        const confirmed = (await confirmResponse.json()) as { status?: string; message?: string; reason?: string };
+        if (confirmed.status === 'processing' || confirmed.status === 'ready') {
+          show('Traitement des variantes en cours…');
+          poll(presigned.mediaId);
+          return; // pas de reset : l'état reste affiché jusqu'au reload
+        }
+        show(confirmed.message ?? 'Le fichier a été refusé par le serveur (type ou taille réels invalides).');
+        reset();
+      } catch (error) {
+        show(`Échec de l'envoi : ${error instanceof Error ? error.message : 'erreur inconnue'}.`);
+        reset();
+      }
+    });
+  }
+</script>

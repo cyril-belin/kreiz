@@ -31,6 +31,11 @@ export type ParsedContentForm = {
   title: string;
   /** Slug brut saisi ('' = généré à la création). */
   slug: string;
+  /**
+   * Couverture saisie — **champ système** (mission §27 : jamais dans `data`).
+   * `null` = aucune (« Aucune »), `string` = id de média prêt.
+   */
+  coverMediaId: string | null;
   /** Données structurées à valider par le schéma du type (champs vides omis). */
   data: Record<string, unknown>;
   /** Valeurs brutes par champ (re-rendu fidèle). */
@@ -143,6 +148,9 @@ export function parseContentForm(
   return {
     title: stringEntry(formData, 'title'),
     slug: stringEntry(formData, 'slug'),
+    // Champ système whitelisté (slice 5) — le service valide l'existence du
+    // média ; tout autre champ non déclaré reste ignoré.
+    coverMediaId: stringEntry(formData, 'cover_media_id') || null,
     data,
     values,
     errors,

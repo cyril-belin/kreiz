@@ -18,6 +18,7 @@ import {
   type InMemoryContentState,
 } from './helpers/in-memory-content';
 import { createRebuildTriggerStub } from './helpers/stub-rebuild-trigger';
+import { createInMemoryMediaRepository, type InMemoryMediaState } from './helpers/in-memory-media';
 
 /**
  * Service contenu — orchestration testée **sans PostgreSQL** (doubles en
@@ -66,11 +67,14 @@ function createService(state?: InMemoryContentState) {
     auditRows: [],
   };
   const rebuild = createRebuildTriggerStub();
+  const mediaState: InMemoryMediaState = { media: new Map(), auditRows: [], entries: contentState.entries };
   const service = createContentService({
     entries: createInMemoryContentRepository(contentState),
+    media: createInMemoryMediaRepository(mediaState),
     audit: createInMemoryAuditRepository(contentState),
     registry: createContentTypeRegistry(articleRegistryInput()),
     rebuild,
+    mediaPublicBaseUrl: 'https://media.example.test/cdn',
   });
   return { service, state: contentState, rebuild };
 }

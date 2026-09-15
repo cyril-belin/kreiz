@@ -34,6 +34,7 @@ export function stubContentEntry(values: Partial<KreizContentEntry> = {}): Kreiz
     publishedTitle: null,
     publishedData: null,
     publishedSeo: null,
+    publishedCoverMediaId: null,
     seo: {},
     data: {},
     createdBy: crypto.randomUUID(),
@@ -89,6 +90,7 @@ export function createInMemoryContentRepository(
         ...(patch.title !== undefined ? { title: patch.title } : {}),
         ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
         ...(patch.data !== undefined ? { data: patch.data } : {}),
+        ...(patch.coverMediaId !== undefined ? { coverMediaId: patch.coverMediaId } : {}),
         updatedBy: patch.updatedBy,
         updatedAt: patch.updatedAt,
       };
@@ -128,6 +130,7 @@ export function createInMemoryContentRepository(
         publishedTitle: patch.publishedTitle,
         publishedData: patch.publishedData,
         publishedSeo: patch.publishedSeo,
+        publishedCoverMediaId: patch.publishedCoverMediaId,
         updatedBy: patch.updatedBy,
         updatedAt: patch.updatedAt,
       };

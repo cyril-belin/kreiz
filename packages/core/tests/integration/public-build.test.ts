@@ -9,6 +9,7 @@ import {
   type KreizAdminUser,
 } from '../../src/data';
 import { createContentEntriesRepository } from '../../src/data/repositories/content-entries';
+import { createMediaRepository } from '../../src/data/repositories/media';
 import { createRedirectsRepository } from '../../src/data/repositories/redirects';
 import {
   describeIntegration,
@@ -34,7 +35,10 @@ import {
  * 5. dépublié → aucune page, et son ancienne redirection (cible morte) n'est
  *    PAS matérialisée ;
  * 6. redirection vivante → route 301 dans `.vercel/output/config.json`
- *    (sortie Vercel réelle, mission §47), source sans page statique.
+ *    (sortie Vercel réelle, mission §47), source sans page statique ;
+ * 7. **couverture publiée** (slice 5) → `<picture>` responsive dans le HTML
+ *    statique : URLs WebP/AVIF construites depuis la base publique,
+ *    width/height, alt — et **aucune** URL d'original ni URL signée.
  *
  * Deuxième build (échec attendu) : un contenu publié au `data` invalide fait
  * échouer explicitement le build (contrat du lecteur, mission §39).
@@ -67,6 +71,16 @@ const invalidSlug = `build-proof-invalid-${runId}`;
 const redirectedFrom = `build-redirected-${runId}`;
 const deadRedirectFrom = `build-dead-redirect-${runId}`;
 
+// Média de couverture — état exact d'un média ready passé par le pipeline.
+const coverMediaId = crypto.randomUUID();
+const coverAlt = `Couverture build ${runId}`;
+const coverVariants = [
+  { key: `media/${coverMediaId}/400.webp`, width: 400, format: 'webp', sizeBytes: 30_000 },
+  { key: `media/${coverMediaId}/400.avif`, width: 400, format: 'avif', sizeBytes: 25_000 },
+  { key: `media/${coverMediaId}/800.webp`, width: 800, format: 'webp', sizeBytes: 60_000 },
+];
+const MEDIA_PUBLIC_BASE_URL = 'https://media.example.test/cdn';
+
 const title = `Article Build Proof ${runId}`;
 const driftPublicTitle = `Titre public figé ${runId}`;
 const excerpt = `Accroche publique ${runId}`;
@@ -75,6 +89,7 @@ const validData = { excerpt, body: `Corps public ${runId}.`, author };
 
 let harness: IntegrationHarness;
 let entries: ReturnType<typeof createContentEntriesRepository>;
+let mediaRepo: ReturnType<typeof createMediaRepository>;
 let redirectsRepo: ReturnType<typeof createRedirectsRepository>;
 let admin: KreizAdminUser;
 
@@ -97,6 +112,7 @@ function runDemoBuild(): { status: number | null; stdout: string; stderr: string
       env: {
         ...process.env,
         KREIZ_DATABASE_URL: databaseUrlForBuild(),
+        KREIZ_STORAGE_PUBLIC_BASE_URL: MEDIA_PUBLIC_BASE_URL,
         ASTRO_TELEMETRY_DISABLED: '1',
       },
       encoding: 'utf8',
@@ -126,6 +142,8 @@ function publishedRow(values: {
   publishedAt?: Date;
   deletedAt?: Date;
   status?: 'draft' | 'published';
+  /** Couverture éditoriale + snapshot public (slice 5) — optionnelle. */
+  coverMediaId?: string | null;
 }) {
   return {
     contentType: 'article',
@@ -139,7 +157,9 @@ function publishedRow(values: {
     publishedData:
       values.publishedData === undefined ? (values.data ?? validData) : values.publishedData,
     publishedSeo: {},
+    publishedCoverMediaId: values.coverMediaId ?? null,
     data: values.data ?? validData,
+    coverMediaId: values.coverMediaId ?? null,
     deletedAt: values.deletedAt ?? null,
     createdBy: admin.id,
     updatedBy: admin.id,
@@ -156,6 +176,7 @@ describeIntegration('chemin public build-time — published → build Astro → 
     }
     harness = await setupIntegration();
     entries = createContentEntriesRepository(harness.db);
+    mediaRepo = createMediaRepository(harness.db);
     redirectsRepo = createRedirectsRepository(harness.db);
     const users = createAdminUsersRepository(harness.db);
     admin = await withTransientNetworkRetry(() =>
@@ -177,6 +198,7 @@ describeIntegration('chemin public build-time — published → build Astro → 
     await withTransientNetworkRetry(() =>
       harness.raw(sql`delete from kreiz_content_entries where slug like ${'build-%'} and created_by = ${admin.id}`),
     );
+    await harness.raw(sql`delete from kreiz_media where uploaded_by = ${admin.id}`);
     await harness.raw(sql`delete from kreiz_admin_users where email like ${emailPattern}`);
     // La sortie de build retrouve son état « 0 page dynamique » (artefacts
     // git-ignorés, régénérés au prochain build).
@@ -187,9 +209,31 @@ describeIntegration('chemin public build-time — published → build Astro → 
   }, 60_000);
 
   it('les scénarios de publication produisent le bon site statique + les redirections 301 Vercel', async () => {
-    // 1. Article publié valide — page à son slug public.
+    // Média de couverture — état exact laissé par le pipeline (ready + variantes).
     await withTransientNetworkRetry(() =>
-      entries.create(publishedRow({ slug: publishedSlug, publishedSlug, title })),
+      mediaRepo.createUploading({
+        id: coverMediaId,
+        storageKey: `media/${coverMediaId}/original`,
+        mime: 'image/png',
+        sizeBytes: 120_000,
+        width: 1000,
+        height: 500,
+        altText: coverAlt,
+        variants: coverVariants,
+        uploadedBy: admin.id,
+      }),
+    );
+    await mediaRepo.markProcessing(coverMediaId, { updatedAt: new Date() });
+    await mediaRepo.markReady(coverMediaId, {
+      width: 1000,
+      height: 500,
+      variants: coverVariants,
+      updatedAt: new Date(),
+    });
+
+    // 1. Article publié valide — page à son slug public, avec couverture.
+    await withTransientNetworkRetry(() =>
+      entries.create(publishedRow({ slug: publishedSlug, publishedSlug, title, coverMediaId })),
     );
     // 2. Published au slug éditorial dérivé : la page publique reste à
     //    l'ancienne adresse (snapshots) — Save != Publish au build.
@@ -265,6 +309,21 @@ describeIntegration('chemin public build-time — published → build Astro → 
     // Vrai template du Project (marqueurs propres à ArticleContent.astro).
     expect(html).toContain('Kreiz, application de démonstration');
     expect(html).not.toContain('brouillon (preview)');
+
+    // — 1bis. Couverture publiée : <picture> responsive dans le HTML statique
+    //         (mission §52/§53) — URLs WebP/AVIF, width/height, alt.
+    expect(html).toContain('<picture>');
+    expect(html).toContain('image/avif');
+    expect(html).toContain('image/webp');
+    expect(html).toContain(`${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/400.avif`);
+    expect(html).toContain(`${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/400.webp`);
+    expect(html).toContain(`${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/800.webp`);
+    expect(html).toContain(`alt="${coverAlt}"`);
+    expect(html).toContain('width="1000"');
+    expect(html).toContain('height="500"');
+    // Aucune URL d'original privé, aucune URL signée expirante (mission §53).
+    expect(html).not.toContain(`/media/${coverMediaId}/original`);
+    expect(html).not.toContain('X-Amz-Signature');
 
     // — 2. Slug dérivé : page à l'adresse publique figée, PAS au slug courant ;
     //      le contenu rendu est celui du snapshot (titre public).

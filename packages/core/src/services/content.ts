@@ -2,7 +2,10 @@ import type { AdminAuditLogRepository } from '../data/repositories/admin-audit-l
 import type {
   ContentEntriesRepository,
 } from '../data/repositories/content-entries.js';
+import type { MediaRepository } from '../data/repositories/media.js';
 import type { KreizContentEntry } from '../data/tables/content-entries.js';
+import type { PublicMediaView } from '../domain/media/view-model.js';
+import { resolvePublicMediaView } from '../domain/media/view-model.js';
 import type { ContentTypeRegistry, ResolvedContentTypeDeclaration } from '../domain/content/registry.js';
 import {
   ContentDeletedError,
@@ -22,11 +25,17 @@ import { auditRebuildFailure } from './rebuild-audit.js';
  * client), générer/vérifier les slugs, écrire via le repository, tracer
  * `created_by` / `updated_by` et écrire l'audit avec le vrai acteur admin.
  *
- * Il publie partiellement : la **publication/dépublication** appartient au
- * service de publication (`services/publication.ts`) ; ce service ne
- * connaît de la reconstruction que le port `RebuildTrigger`, utilisé par la
- * **suppression d'un contenu publié** (sa page quitte le site au prochain
- * build — mission §31). Il n'appelle aucun service d'infrastructure
+ * Slice 5 — couverture : `cover_media_id` est un **champ système** de la
+ * colonne dédiée (jamais dans `data`, mission §27). Le Save valide que le
+ * média existe (un draft peut référencer un média en cours de traitement) ;
+ * la **publication** seule exige un média `ready` (service de publication,
+ * mission §29). Les vues exposées portent la couverture publique résolue
+ * (`ready` uniquement — un média non prêt ne rend jamais d'image).
+ *
+ * Il ne publie pas : la publication/dépublication appartient au service de
+ * publication (`services/publication.ts`) ; ce service ne connaît de la
+ * reconstruction que le port `RebuildTrigger`, utilisé par la suppression
+ * d'un contenu publié. Il n'appelle aucun service d'infrastructure
  * (Vercel, R2), ne crée pas de redirections et ne connaît pas les templates
  * Astro — il retourne des vues que les routes rendent avec le composant du
  * Project.
@@ -47,11 +56,18 @@ export type ContentFieldErrors = Record<string, string>;
 
 export type ContentServiceDeps = {
   entries: ContentEntriesRepository;
+  /** Repository médias — existence des couvertures + résolution des vues. */
+  media: MediaRepository;
   audit: AdminAuditLogRepository;
   /** Registre des types déclarés par le Project — injecté (jamais le module virtuel). */
   registry: ContentTypeRegistry;
   /** Port de reconstruction — utilisé uniquement par la suppression d'un publié. */
   rebuild: RebuildTrigger;
+  /**
+   * Base publique des variantes média (env serveur du Project) — `null` =
+   * stockage non configuré : les vues de couverture restent alors `null`.
+   */
+  mediaPublicBaseUrl: string | null;
 };
 
 /** Résultat d'une mutation de brouillon validée. */
@@ -76,6 +92,8 @@ export type CreateDraftInput = {
   slug?: string;
   /** Données spécifiques déjà structurées par le parseur de formulaire (whitelist). */
   data: Record<string, unknown>;
+  /** Couverture éditoriale (champ système) — média existant requis au Save. */
+  coverMediaId?: string | null;
   /** Admin authentifié — vient du guard, jamais du formulaire. */
   actorAdminId: string;
 };
@@ -85,6 +103,8 @@ export type UpdateDraftInput = {
   title: string;
   slug?: string;
   data: Record<string, unknown>;
+  /** `undefined` = inchangée · `null` = retirer · string = média existant requis. */
+  coverMediaId?: string | null;
   actorAdminId: string;
 };
 
@@ -140,6 +160,34 @@ export function createContentService(deps: ContentServiceDeps) {
     });
   }
 
+  /**
+   * Couverture au **Save** : le média doit exister et ne pas être supprimé
+   * (la FK aurait refusé, mais avec une erreur SQL — ici c'est une erreur
+   * de champ propre). Un média `processing`/`failed` reste acceptable en
+   * brouillon : la publication seule exige `ready` (mission §29).
+   */
+  async function validateCoverInput(
+    coverMediaId: string,
+    errors: ContentFieldErrors,
+  ): Promise<string | null> {
+    const mediaRow = await deps.media.findById(coverMediaId);
+    if (!mediaRow || mediaRow.deletedAt) {
+      errors.cover = "La couverture sélectionnée n'existe pas.";
+      return null;
+    }
+    return mediaRow.id;
+  }
+
+  /** Vue publique de la couverture d'un contenu — `ready` uniquement, sinon `null`. */
+  async function resolveCoverView(
+    coverMediaId: string | null,
+  ): Promise<PublicMediaView | null> {
+    if (!coverMediaId || !deps.mediaPublicBaseUrl) return null;
+    const mediaRow = await deps.media.findById(coverMediaId);
+    if (!mediaRow || mediaRow.status !== 'ready') return null;
+    return resolvePublicMediaView(mediaRow, { publicBaseUrl: deps.mediaPublicBaseUrl });
+  }
+
   return {
     /** Registre résolu des types déclarés — les routes y retrouvent leurs déclarations. */
     registry,
@@ -161,6 +209,13 @@ export function createContentService(deps: ContentServiceDeps) {
 
       const title = validateTitle(input.title, errors);
       const data = validateData(declaration, input.data, errors);
+
+      // Couverture (champ système, mission §27) — existance vérifiée.
+      let coverMediaId: string | null = null;
+      if (input.coverMediaId) {
+        const validatedCover = await validateCoverInput(input.coverMediaId, errors);
+        coverMediaId = validatedCover;
+      }
 
       const manualSlug = Boolean(input.slug && input.slug.trim().length > 0);
       const slugBase = manualSlug ? normalizeSlugInput(input.slug as string) : slugify(title) || SLUG_FALLBACK;
@@ -197,13 +252,20 @@ export function createContentService(deps: ContentServiceDeps) {
             slug: candidate,
             status: 'draft',
             data,
+            coverMediaId,
             createdBy: input.actorAdminId,
             updatedBy: input.actorAdminId,
             createdAt: now,
             updatedAt: now,
           });
           await auditContentEvent(CONTENT_AUDIT_ACTIONS.created, entry, input.actorAdminId);
-          return { kind: 'created', entry, view: resolveContentViewModel(declaration, entry) };
+          return {
+            kind: 'created',
+            entry,
+            view: resolveContentViewModel(declaration, entry, {
+              cover: await resolveCoverView(entry.coverMediaId),
+            }),
+          };
         } catch (error) {
           // Course concurrentielle sur l'index unique partiel : candidat
           // suivant pour un slug généré, erreur de validation pour un slug
@@ -256,6 +318,16 @@ export function createContentService(deps: ContentServiceDeps) {
       const title = validateTitle(input.title, errors);
       const data = validateData(declaration, input.data, errors);
 
+      // Couverture : `undefined` = inchangée, `null` = retirée, id = validée.
+      let coverMediaId: string | null | undefined;
+      if (input.coverMediaId !== undefined && input.coverMediaId !== existing.coverMediaId) {
+        if (input.coverMediaId === null) {
+          coverMediaId = null;
+        } else {
+          coverMediaId = await validateCoverInput(input.coverMediaId, errors);
+        }
+      }
+
       let slug = existing.slug;
       if (input.slug !== undefined) {
         const normalized = normalizeSlugInput(input.slug);
@@ -282,6 +354,7 @@ export function createContentService(deps: ContentServiceDeps) {
           title,
           slug,
           data,
+          ...(coverMediaId !== undefined ? { coverMediaId } : {}),
           updatedBy: input.actorAdminId,
           updatedAt: now,
         });
@@ -290,7 +363,13 @@ export function createContentService(deps: ContentServiceDeps) {
           throw new ContentDeletedError(input.entryId);
         }
         await auditContentEvent(CONTENT_AUDIT_ACTIONS.updated, updated, input.actorAdminId);
-        return { kind: 'updated', entry: updated, view: resolveContentViewModel(declaration, updated) };
+        return {
+          kind: 'updated',
+          entry: updated,
+          view: resolveContentViewModel(declaration, updated, {
+            cover: await resolveCoverView(updated.coverMediaId),
+          }),
+        };
       } catch (error) {
         // Course concurrentielle : le slug a été pris entre la vérification
         // et l'écriture — erreur de validation, jamais un 23505 brut.
@@ -335,7 +414,13 @@ export function createContentService(deps: ContentServiceDeps) {
         throw new ContentDeletedError(entryId);
       }
       const declaration = requireDeclaration(entry.contentType);
-      return { entry, declaration, view: resolveContentViewModel(declaration, entry) };
+      return {
+        entry,
+        declaration,
+        view: resolveContentViewModel(declaration, entry, {
+          cover: await resolveCoverView(entry.coverMediaId),
+        }),
+      };
     },
 
     /** Alias sémantique de la preview — mêmes garanties que l'édition. */

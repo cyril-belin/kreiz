@@ -19,6 +19,7 @@ import {
   type InMemoryContentState,
 } from './helpers/in-memory-content';
 import { createRebuildTriggerStub } from './helpers/stub-rebuild-trigger';
+import { createInMemoryMediaRepository } from './helpers/in-memory-media';
 
 /**
  * Service de publication — cycle Save → Publish → rebuild (mission §3-§17),
@@ -54,10 +55,12 @@ function setup(state: InMemoryContentState = { entries: new Map(), redirects: ne
   const rebuild = createRebuildTriggerStub();
   const service = createPublicationService({
     entries: createInMemoryContentRepository(state),
+    media: createInMemoryMediaRepository({ media: new Map(), auditRows: [], entries: state.entries }),
     redirects: createInMemoryRedirectsRepository(state),
     audit: createInMemoryAuditRepository(state),
     registry: createContentTypeRegistry(registryInput()),
     rebuild,
+    mediaPublicBaseUrl: null,
   });
   return { service, state, rebuild };
 }

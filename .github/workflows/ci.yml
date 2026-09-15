@@ -23,10 +23,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  # Niveau 2 — intégration Neon + E2E back-office (slice 2).
+  # Niveau 2 — intégration Neon + E2E back-office (slices 2 à 5).
   # Branche Neon éphémère par run : créer → migrer (chaîne apps/demo) →
-  # tester (intégration + E2E Playwright sur serveur dev SSR) → supprimer,
-  # même en cas d'échec des tests.
+  # tester (intégration + E2E Playwright sur serveur dev SSR + serveur S3
+  # local pour l'upload présigné, sans credential cloud) → supprimer, même
+  # en cas d'échec des tests.
   #
   # Ouvert uniquement quand la variable de dépôt RUN_INTEGRATION = 'true'
   # ET que les secrets Neon sont disponibles (repo d'origine). Une PR de

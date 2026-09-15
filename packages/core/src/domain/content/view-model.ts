@@ -4,6 +4,7 @@ import type {
   KreizContentSeo,
   KreizContentStatus,
 } from '../../data/tables/content-entries.js';
+import type { PublicMediaView } from '../media/view-model.js';
 import { ContentDataCorruptedError, UnknownContentTypeError } from './errors.js';
 
 /**
@@ -13,6 +14,12 @@ import { ContentDataCorruptedError, UnknownContentTypeError } from './errors.js'
  * `resolveContentViewModel` et passent **exactement les mêmes données
  * structurées** au **même composant** de template du Project. Aucun
  * renderer de preview parallèle.
+ *
+ * `cover` (slice 5) : la vue publique du média de couverture — `ready`
+ * uniquement (mission §29), résolue par l'appelant (service de contenu pour
+ * la preview, lecteur de build pour le public) qui passe la vue déjà
+ * résolue en option. `null` = pas de couverture (ou couverture non prête en
+ * preview — jamais rendue comme image valide).
  */
 export interface ContentView<TData> {
   readonly id: string;
@@ -25,6 +32,8 @@ export interface ContentView<TData> {
   readonly updatedAt: Date;
   readonly createdAt: Date;
   readonly seo: KreizContentSeo;
+  /** Couverture résolue (`ready` uniquement), ou `null`. */
+  readonly cover: PublicMediaView | null;
   /** Données spécifiques du type, validées par le schéma de la déclaration. */
   readonly data: TData;
 }
@@ -56,6 +65,7 @@ type ContentEntryLike = Pick<
 export function resolveContentViewModel<TData>(
   declaration: { key: string; routeNamespace: string; dataSchema: z.ZodType<TData> },
   entry: ContentEntryLike,
+  options: { cover?: PublicMediaView | null } = {},
 ): ContentView<TData> {
   if (entry.contentType !== declaration.key) {
     throw new UnknownContentTypeError(
@@ -85,6 +95,7 @@ export function resolveContentViewModel<TData>(
     updatedAt: entry.updatedAt,
     createdAt: entry.createdAt,
     seo: entry.seo,
+    cover: options.cover ?? null,
     data: parsed.data,
   };
 }

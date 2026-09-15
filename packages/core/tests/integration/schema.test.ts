@@ -39,7 +39,7 @@ const FK_DELETE_RULES: Array<[string, string, number]> = [
   ['kreiz_media', 'r', 1],
   ['kreiz_redirects', 'n', 1],
   ['kreiz_analytics_events', 'n', 1],
-  ['kreiz_content_entries', 'r', 3], // created_by, updated_by, cover_media_id
+  ['kreiz_content_entries', 'r', 4], // created_by, updated_by, cover_media_id, published_cover_media_id (slice 5)
 ];
 
 const UNIQUE_INDEXES = [
@@ -92,7 +92,12 @@ describeIntegration('schéma — base migrée par la chaîne apps/demo', () => {
 
     expected('kreiz_admin_users', ['disabled_at']);
     expected('kreiz_admin_sessions', ['revoked_at']);
-    expected('kreiz_content_entries', ['cover_media_id', 'published_at', 'deleted_at']);
+    expected('kreiz_content_entries', [
+      'cover_media_id',
+      'published_cover_media_id',
+      'published_at',
+      'deleted_at',
+    ]);
     expected('kreiz_media', ['failure_reason', 'width', 'height', 'deleted_at']);
     expected('kreiz_analytics_events', ['referrer', 'content_type', 'content_entry_id', 'device_class', 'country']);
     expected('kreiz_redirects', ['content_entry_id']);

@@ -46,6 +46,27 @@ export const ADMIN_PREVIEW_PATTERN = '/admin/preview/[id]';
 /** Rebuild manuel — mutation POST authentifiée, même port `RebuildTrigger`. */
 export const ADMIN_REBUILD_PATH = '/admin/rebuild';
 
+// ——— Médias (slice 5) — pages, mutations POST et endpoints JSON, tous SSR sous /admin ———
+
+/** Médiathèque : grille, upload présigné, alt, retry, suppression. */
+export const ADMIN_MEDIA_PATH = '/admin/media';
+/**
+ * Demande d'upload — POST JSON authentifié (session + CSRF + same-origin,
+ * mission §37 : **jamais** d'endpoint public de présignature). Le fichier
+ * lui-même part ensuite directement du navigateur vers le stockage.
+ */
+export const ADMIN_MEDIA_UPLOAD_REQUEST_PATH = '/admin/media/upload-request';
+/** Confirmation post-upload — POST JSON (vérification serveur de l'objet réel). */
+export const ADMIN_MEDIA_CONFIRM_PATTERN = '/admin/media/[id]/confirm';
+/** Polling de statut — GET JSON (uploading/processing/ready/failed). */
+export const ADMIN_MEDIA_STATUS_PATTERN = '/admin/media/[id]/status';
+/** Alt text — mutation POST (formulaire progressif). */
+export const ADMIN_MEDIA_ALT_PATTERN = '/admin/media/[id]/alt';
+/** Retry d'un média failed — mutation POST. */
+export const ADMIN_MEDIA_RETRY_PATTERN = '/admin/media/[id]/retry';
+/** Suppression (référencé = refusé, mission §26) — mutation POST. */
+export const ADMIN_MEDIA_DELETE_PATTERN = '/admin/media/[id]/delete';
+
 /** Patterns des routes admin injectées par l'intégration (tous sous le préfixe). */
 export const ADMIN_ROUTE_PATTERNS = [
   ADMIN_HOME_PATH,
@@ -60,6 +81,13 @@ export const ADMIN_ROUTE_PATTERNS = [
   ADMIN_CONTENT_UNPUBLISH_PATTERN,
   ADMIN_PREVIEW_PATTERN,
   ADMIN_REBUILD_PATH,
+  ADMIN_MEDIA_PATH,
+  ADMIN_MEDIA_UPLOAD_REQUEST_PATH,
+  ADMIN_MEDIA_CONFIRM_PATTERN,
+  ADMIN_MEDIA_STATUS_PATTERN,
+  ADMIN_MEDIA_ALT_PATTERN,
+  ADMIN_MEDIA_RETRY_PATTERN,
+  ADMIN_MEDIA_DELETE_PATTERN,
 ] as const;
 
 // ——— Constructeurs d'URL admin (pages et formulaires) ———
@@ -90,4 +118,26 @@ export function adminContentUnpublishPath(contentTypeKey: string, entryId: strin
 
 export function adminPreviewPath(entryId: string): string {
   return `/admin/preview/${encodeURIComponent(entryId)}`;
+}
+
+// ——— Constructeurs d'URL médias (slice 5) ———
+
+export function adminMediaConfirmPath(mediaId: string): string {
+  return `${ADMIN_MEDIA_PATH}/${encodeURIComponent(mediaId)}/confirm`;
+}
+
+export function adminMediaStatusPath(mediaId: string): string {
+  return `${ADMIN_MEDIA_PATH}/${encodeURIComponent(mediaId)}/status`;
+}
+
+export function adminMediaAltPath(mediaId: string): string {
+  return `${ADMIN_MEDIA_PATH}/${encodeURIComponent(mediaId)}/alt`;
+}
+
+export function adminMediaRetryPath(mediaId: string): string {
+  return `${ADMIN_MEDIA_PATH}/${encodeURIComponent(mediaId)}/retry`;
+}
+
+export function adminMediaDeletePath(mediaId: string): string {
+  return `${ADMIN_MEDIA_PATH}/${encodeURIComponent(mediaId)}/delete`;
 }

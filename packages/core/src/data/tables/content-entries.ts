@@ -36,23 +36,28 @@ export type KreizContentSeo = {
  *
  * **Deux projections sur la même ligne** (mission §5, §20 — sémantique
  * « Save != Publish ») :
- * - état éditorial **courant** : `title`, `slug`, `data`, `seo` — modifiés
- *   par chaque Save, jamais rendus au public directement ;
+ * - état éditorial **courant** : `title`, `slug`, `data`, `seo`, `cover_media_id` —
+ *   modifiés par chaque Save, jamais rendus au public directement ;
  * - **dernier état effectivement public** : `published_slug`, `published_title`,
- *   `published_data`, `published_seo`, `published_at` — figés par Publish,
- *   seuls lus par le build public. Un Save sur un contenu publié ne change
- *   donc jamais la sortie publique, même au prochain rebuild déclenché par
- *   un autre contenu. `null` = jamais publié (Publish est l'unique
- *   écrivain ; une ligne `published` sans snapshot est une corruption).
- *   `published_at` reste la date de **première** publication (mission §6) ;
- *   les snapshots de slug/title/data/seo sont écrasés à chaque publication.
+ *   `published_data`, `published_seo`, `published_cover_media_id`, `published_at` —
+ *   figés par Publish, seuls lus par le build public. Un Save sur un contenu
+ *   publié ne change donc jamais la sortie publique, même au prochain rebuild
+ *   déclenché par un autre contenu — **couverture comprise** (mission slice 5
+ *   §28 : sans snapshot, un changement de couverture non publié serait
+ *   matérialisé par le rebuild d'un autre contenu). `null` = jamais publié
+ *   (Publish est l'unique écrivain ; une ligne `published` sans snapshot est
+ *   une corruption). `published_at` reste la date de **première** publication
+ *   (mission §6) ; les snapshots de slug/title/data/seo/cover sont écrasés à
+ *   chaque publication.
  *
  * Contrainte structurante : unicité `(route_namespace, slug)` **partielle**
  * (`WHERE deleted_at IS NULL`) — un slug réapparaît disponible après soft
  * delete, sans jamais entrer en collision avec un contenu actif.
- * `ON DELETE RESTRICT` sur `created_by` / `updated_by` / `cover_media_id` :
- * ni un admin ni un média référencés ne peuvent être supprimés physiquement
- * et écraser l'historique éditorial par effet de bord.
+ * `ON DELETE RESTRICT` sur `created_by` / `updated_by` / `cover_media_id` /
+ * `published_cover_media_id` : ni un admin ni un média référencé ne peuvent
+ * être supprimés physiquement et écraser l'historique éditorial par effet de
+ * bord — la suppression d'un média utilisé est refusée explicitement
+ * (mission slice 5 §26/§46).
  */
 export const contentEntries = pgTable(
   'kreiz_content_entries',
@@ -69,6 +74,10 @@ export const contentEntries = pgTable(
     publishedTitle: text('published_title'),
     publishedData: jsonb('published_data').$type<Record<string, unknown>>(),
     publishedSeo: jsonb('published_seo').$type<KreizContentSeo>(),
+    /** Snapshot de la couverture — figé par Publish, seul lu par le build public (slice 5). */
+    publishedCoverMediaId: uuid('published_cover_media_id').references(() => media.id, {
+      onDelete: 'restrict',
+    }),
     seo: jsonb('seo').$type<KreizContentSeo>().notNull().default({}),
     data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
     createdBy: uuid('created_by')

@@ -1,6 +1,7 @@
 ---
 import type { ContentView } from '@kreiz/core/content';
 import type { GuideData } from '../content-types/guide.js';
+import CoverPicture from './CoverPicture.astro';
 import '../styles/global.css';
 
 /**
@@ -47,6 +48,8 @@ const publishedDate = view.publishedAt
           <p class="mt-4 text-lg leading-relaxed text-neutral-300">{view.data.excerpt}</p>
           {publishedDate && <p class="mt-6 text-sm text-neutral-400">{publishedDate}</p>}
         </header>
+
+        {view.cover && <CoverPicture cover={view.cover} />}
 
         <div class="mt-8 space-y-4 leading-relaxed text-neutral-200">
           {

@@ -1,0 +1,40 @@
+---
+import { mediaFallbackSrc, mediaSources, type PublicMediaView } from '@kreiz/core/media';
+
+/**
+ * Couverture responsive du projet de démonstration — composant **local**
+ * (le Core fournit les helpers, le projet possède son markup). `<picture>`
+ * AVIF/WebP + fallback, width/height (ratio réservé avant chargement),
+ * alt, lazy loading par défaut.
+ */
+interface Props {
+  cover: PublicMediaView;
+  eager?: boolean;
+}
+
+const { cover, eager = false } = Astro.props;
+const sources = mediaSources(cover);
+const fallback = mediaFallbackSrc(cover);
+---
+
+{
+  fallback && (
+    <figure class="mt-8" data-kreiz-cover>
+      <picture>
+        {sources.map((source) => (
+          <source type={source.type} srcset={source.srcset} />
+        ))}
+        <img
+          src={fallback}
+          alt={cover.alt}
+          width={cover.width}
+          height={cover.height}
+          loading={eager ? 'eager' : 'lazy'}
+          decoding="async"
+          class="w-full rounded-lg border border-neutral-800"
+        />
+      </picture>
+      {cover.alt && <figcaption class="mt-2 text-sm text-neutral-500">{cover.alt}</figcaption>}
+    </figure>
+  )
+}

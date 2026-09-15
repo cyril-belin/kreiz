@@ -8,6 +8,7 @@ import type { AdminAuditLogRepository } from '../data/repositories/admin-audit-l
 import type {
   ContentEntriesRepository,
 } from '../data/repositories/content-entries.js';
+import type { MediaRepository } from '../data/repositories/media.js';
 import type { RedirectsRepository } from '../data/repositories/redirects.js';
 import type { KreizContentEntry } from '../data/tables/content-entries.js';
 import type { ContentTypeRegistry, ResolvedContentTypeDeclaration } from '../domain/content/registry.js';
@@ -21,6 +22,7 @@ import {
   publicPath,
 } from '../domain/content/redirect-engine.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
+import { resolvePublicMediaView } from '../domain/media/view-model.js';
 import {
   contentFieldErrorMessage,
   validateContentTitle,
@@ -65,12 +67,16 @@ export const PUBLICATION_AUDIT_ACTIONS = {
 
 export type PublicationServiceDeps = {
   entries: ContentEntriesRepository;
+  /** Repository médias — validation de la couverture à la publication (slice 5). */
+  media: MediaRepository;
   redirects: RedirectsRepository;
   audit: AdminAuditLogRepository;
   /** Port de reconstruction — seul point de contact infrastructure du service. */
   rebuild: RebuildTrigger;
   /** Registre des types déclarés par le Project — injecté (jamais le module virtuel). */
   registry: ContentTypeRegistry;
+  /** Base publique des variantes média — résolution de la vue de couverture publiée. */
+  mediaPublicBaseUrl: string | null;
 };
 
 export type PublishContentInput = { entryId: string; actorAdminId: string };
@@ -95,26 +101,48 @@ export type UnpublishContentOutcome =
 export type RequestRebuildOutcome = { rebuild: RebuildTriggerResult };
 
 export function createPublicationService(deps: PublicationServiceDeps) {
-  const { entries, redirects, audit, rebuild, registry } = deps;
+  const { entries, media, redirects, audit, rebuild, registry } = deps;
 
   function requireDeclaration(contentType: string): ResolvedContentTypeDeclaration {
     return registry.requireByKey(contentType);
   }
 
   /**
-   * Valide l'état éditorial **courant** avant publication : titre commun et
-   * JSONB spécifique contre le schéma strict du type. Toute invalidité
-   * échoue **avant** la moindre écriture (mission §4).
+   * Valide l'état éditorial **courant** avant publication : titre commun,
+   * JSONB spécifique contre le schéma strict du type, et couverture
+   * **`ready`** (mission §29 — le contenu publié ne référence jamais une
+   * image `processing`/`failed` ; la validation est ici, pas au rendu).
+   * Toute invalidité échoue **avant** la moindre écriture (mission §4).
    */
-  function validateForPublish(
+  async function validateForPublish(
     declaration: ResolvedContentTypeDeclaration,
     entry: KreizContentEntry,
-  ): { title: string; data: Record<string, unknown> } | { errors: ContentFieldErrors } {
+  ): Promise<
+    | { title: string; data: Record<string, unknown>; cover: ContentView<unknown>['cover'] }
+    | { errors: ContentFieldErrors }
+  > {
     const errors: ContentFieldErrors = {};
     const title = validateContentTitle(entry.title, errors);
     const parsed = declaration.dataSchema.safeParse(entry.data);
+
+    let cover: ContentView<unknown>['cover'] = null;
+    if (entry.coverMediaId) {
+      const mediaRow = await media.findById(entry.coverMediaId);
+      if (!mediaRow || mediaRow.deletedAt) {
+        errors.cover = "La couverture sélectionnée n'existe plus.";
+      } else if (mediaRow.status !== 'ready') {
+        errors.cover =
+          'La couverture doit être un média prêt (ready) pour publier — réessayez une fois le traitement terminé.';
+      } else if (deps.mediaPublicBaseUrl) {
+        cover = resolvePublicMediaView(mediaRow, { publicBaseUrl: deps.mediaPublicBaseUrl });
+      } else {
+        errors.cover =
+          'Le stockage média public n’est pas configuré (KREIZ_STORAGE_PUBLIC_BASE_URL) — publication avec couverture impossible.';
+      }
+    }
+
     if (parsed.success && Object.keys(errors).length === 0) {
-      return { title, data: parsed.data as Record<string, unknown> };
+      return { title, data: parsed.data as Record<string, unknown>, cover };
     }
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
@@ -149,8 +177,9 @@ export function createPublicationService(deps: PublicationServiceDeps) {
 
       const declaration = requireDeclaration(existing.contentType);
 
-      // Validation avant tout effet de bord (mission §4).
-      const validated = validateForPublish(declaration, existing);
+      // Validation avant tout effet de bord (mission §4) — couverture
+      // `ready` comprise (mission §29).
+      const validated = await validateForPublish(declaration, existing);
       if ('errors' in validated) {
         return { kind: 'invalid', errors: validated.errors };
       }
@@ -200,13 +229,15 @@ export function createPublicationService(deps: PublicationServiceDeps) {
         redirect = { fromPath: plan.fromPath, toPath: plan.toPath };
       }
 
-      // Point de bascule : fige le dernier état public et bascule le statut.
+      // Point de bascule : fige le dernier état public (couverture comprise,
+      // mission slice 5 §28) et bascule le statut.
       const published = await entries.markPublished(existing.id, {
         publishedAt: existing.publishedAt ?? now,
         publishedSlug: existing.slug,
         publishedTitle: validated.title,
         publishedData: validated.data,
         publishedSeo: existing.seo,
+        publishedCoverMediaId: existing.coverMediaId,
         updatedBy: input.actorAdminId,
         updatedAt: now,
       });
@@ -239,7 +270,7 @@ export function createPublicationService(deps: PublicationServiceDeps) {
       return {
         kind: 'published',
         entry: published,
-        view: resolveContentViewModel(declaration, published),
+        view: resolveContentViewModel(declaration, published, { cover: validated.cover }),
         redirect,
         rebuild,
       };

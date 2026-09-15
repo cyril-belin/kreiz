@@ -1,6 +1,7 @@
 ---
 import type { ContentView } from '@kreiz/core/content';
 import type { CaseStudyData } from '../content-types/case-study.js';
+import CoverPicture from './CoverPicture.astro';
 import '../styles/global.css';
 
 /**
@@ -47,6 +48,8 @@ const publishedDate = view.publishedAt
           <p class="mt-4 text-lg leading-relaxed text-neutral-300">{view.data.shortDescription}</p>
           {publishedDate && <p class="mt-6 text-sm text-neutral-400">{publishedDate}</p>}
         </header>
+
+        {view.cover && <CoverPicture cover={view.cover} />}
 
         {
           view.data.results.length > 0 && (

@@ -3,6 +3,7 @@ export const prerender = false;
 
 import AdminShell from '../../components/AdminShell.astro';
 import ContentFormFields from '../../components/ContentFormFields.astro';
+import CoverPicker from '../../components/CoverPicker.astro';
 import MessagePanel from '../../components/MessagePanel.astro';
 import {
   ADMIN_CONTENT_INDEX_PATH,
@@ -84,12 +85,27 @@ const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', ti
 // État du formulaire (re-rendu fidèle en cas d'erreur de validation).
 let formTitle = loaded?.entry.title ?? '';
 let formSlug = loaded?.entry.slug ?? '';
+let formCoverMediaId: string | null = loaded?.entry.coverMediaId ?? null;
 let fieldValues: Record<string, FormFieldValue> = formValuesFromData(
   declaration?.fields ?? {},
   loaded?.entry.data ?? {},
 );
 let fieldErrors: Record<string, string> = {};
 let formError: string | null = null;
+
+// Pickers de couverture : médias `ready` uniquement (mission §29).
+const readyMedia = access.runtime.mediaAdmin
+  ? (await access.runtime.mediaAdmin.listReady()).map((media) => ({ id: media.id, alt: media.altText }))
+  : [];
+
+/** Miniature de la couverture courante — plus petite variante WebP (serveur). */
+function coverThumbnail(
+  cover: { variants: ReadonlyArray<{ url: string; format: string }> } | null | undefined,
+): string | null {
+  if (!cover) return null;
+  const webp = cover.variants.filter((variant) => variant.format === 'image/webp');
+  return (webp[0] ?? cover.variants[0])?.url ?? null;
+}
 
 // Bandeaux de résultat (redirections 303 des mutations POST).
 const saved = Astro.url.searchParams.get('saved') === '1';
@@ -127,12 +143,14 @@ if (loaded && Astro.request.method === 'POST') {
       const parsed = parseContentForm(declaration!, formData);
       formTitle = parsed.title;
       formSlug = parsed.slug;
+      formCoverMediaId = parsed.coverMediaId;
       fieldValues = parsed.values;
       const outcome = await access.runtime.content.updateDraft({
         entryId,
         title: parsed.title,
         slug: parsed.slug.length > 0 ? parsed.slug : undefined,
         data: parsed.data,
+        coverMediaId: parsed.coverMediaId,
         actorAdminId: access.access.admin.id,
       });
       if (outcome.kind === 'updated') {
@@ -338,6 +356,13 @@ if (loaded && Astro.request.method === 'POST') {
             </div>
 
             <ContentFormFields fields={declaration.fields} values={fieldValues} errors={fieldErrors} />
+
+            <CoverPicker
+              readyMedia={readyMedia}
+              selectedMediaId={formCoverMediaId}
+              selectedThumbnailUrl={coverThumbnail(loaded.view.cover)}
+              error={fieldErrors.cover}
+            />
 
             {fieldErrors['_form'] && <p class="kz-alert" role="alert">{fieldErrors['_form']}</p>}
 

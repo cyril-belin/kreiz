@@ -9,6 +9,7 @@ import { fields } from '../../src/domain/content/fields';
 import { ContentDataCorruptedError } from '../../src/domain/content/errors';
 import { createContentService, CONTENT_AUDIT_ACTIONS } from '../../src/services/content';
 import { createContentEntriesRepository } from '../../src/data/repositories/content-entries';
+import { createMediaRepository } from '../../src/data/repositories/media';
 import { createAdminAuditLogRepository } from '../../src/data/repositories/admin-audit-log';
 import {
   describeIntegration,
@@ -72,9 +73,11 @@ describeIntegration('moteur de contenu — service + PostgreSQL réel', () => {
     const users = createAdminUsersRepository(harness.db);
     service = createContentService({
       entries: entriesRepo,
+      media: createMediaRepository(harness.db),
       audit: createAdminAuditLogRepository(harness.db),
       registry,
       rebuild: createRebuildTriggerStub(),
+      mediaPublicBaseUrl: 'https://media.example.test/cdn',
     });
     admin = await withTransientNetworkRetry(() =>
       users.create({

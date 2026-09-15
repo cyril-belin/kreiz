@@ -11,6 +11,7 @@ import { hasUnpublishedChanges, resolvePublishedProjection } from '../../src/dom
 import { createContentService } from '../../src/services/content';
 import { createPublicationService } from '../../src/services/publication';
 import { createContentEntriesRepository } from '../../src/data/repositories/content-entries';
+import { createMediaRepository } from '../../src/data/repositories/media';
 import { createRedirectsRepository } from '../../src/data/repositories/redirects';
 import { createAdminAuditLogRepository } from '../../src/data/repositories/admin-audit-log';
 import {
@@ -78,16 +79,20 @@ describeIntegration('publication — service + PostgreSQL réel', () => {
     const audit = createAdminAuditLogRepository(harness.db);
     content = createContentService({
       entries: entriesRepo,
+      media: createMediaRepository(harness.db),
       audit,
       registry,
       rebuild,
+      mediaPublicBaseUrl: 'https://media.example.test/cdn',
     });
     publication = createPublicationService({
       entries: entriesRepo,
+      media: createMediaRepository(harness.db),
       redirects: redirectsRepo,
       audit,
       registry,
       rebuild,
+      mediaPublicBaseUrl: 'https://media.example.test/cdn',
     });
     const users = createAdminUsersRepository(harness.db);
     admin = await withTransientNetworkRetry(() =>

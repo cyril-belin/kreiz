@@ -86,10 +86,11 @@ export function createContentEntriesRepository(db: KreizDatabase) {
 
     /**
      * Mise à jour d'un brouillon — seuls les champs éditables du slice 3
-     * (titre, slug, data, traçabilité) sont acceptés : le contenu_type, le
-     * namespace, le statut et les dates de publication ne passent jamais
-     * par cette méthode. Retourne `null` si l'entrée est absente ou déjà
-     * supprimée (soft).
+     * (titre, slug, data, traçabilité) plus la couverture (slice 5 — champ
+     * système `cover_media_id`, jamais stockée dans `data`) sont acceptés :
+     * le contenu_type, le namespace, le statut et les dates de publication
+     * ne passent jamais par cette méthode. Retourne `null` si l'entrée est
+     * absente ou déjà supprimée (soft).
      */
     async updateDraft(
       id: string,
@@ -97,6 +98,8 @@ export function createContentEntriesRepository(db: KreizDatabase) {
         title?: string;
         slug?: string;
         data?: Record<string, unknown>;
+        /** Couverture éditoriale — `null` = retirer la couverture. */
+        coverMediaId?: string | null;
         updatedBy: string;
         updatedAt: Date;
       },
@@ -107,6 +110,7 @@ export function createContentEntriesRepository(db: KreizDatabase) {
           ...(patch.title !== undefined ? { title: patch.title } : {}),
           ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
           ...(patch.data !== undefined ? { data: patch.data } : {}),
+          ...(patch.coverMediaId !== undefined ? { coverMediaId: patch.coverMediaId } : {}),
           updatedBy: patch.updatedBy,
           updatedAt: patch.updatedAt,
         })
@@ -180,6 +184,8 @@ export function createContentEntriesRepository(db: KreizDatabase) {
         publishedTitle: string;
         publishedData: Record<string, unknown>;
         publishedSeo: KreizContentSeo;
+        /** Snapshot de la couverture au moment de la publication (slice 5). */
+        publishedCoverMediaId: string | null;
         updatedBy: string;
         updatedAt: Date;
       },
@@ -193,6 +199,7 @@ export function createContentEntriesRepository(db: KreizDatabase) {
           publishedTitle: patch.publishedTitle,
           publishedData: patch.publishedData,
           publishedSeo: patch.publishedSeo,
+          publishedCoverMediaId: patch.publishedCoverMediaId,
           updatedBy: patch.updatedBy,
           updatedAt: patch.updatedAt,
         })

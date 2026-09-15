@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import '../styles/admin.css';
-import { ADMIN_HOME_PATH, ADMIN_LOGOUT_PATH, adminContentTypePath } from '../../http/admin-routes.js';
+import { ADMIN_HOME_PATH, ADMIN_LOGOUT_PATH, ADMIN_MEDIA_PATH, adminContentTypePath } from '../../http/admin-routes.js';
 import type { KreizAdminUser } from '../../data/tables/admin-users.js';
 import { CSRF_FORM_FIELD } from '../../http/csrf.js';
 import { getContentRegistry } from '../../content/runtime.js';
@@ -46,6 +46,12 @@ const navSections: NavSection[] = [
         currentPath.startsWith(`${adminContentTypePath(type.key)}/`),
       disabled: false,
     })),
+  },
+  {
+    label: 'Médias',
+    items: [
+      { label: 'Médiathèque', href: ADMIN_MEDIA_PATH, current: currentPath === ADMIN_MEDIA_PATH || currentPath.startsWith(`${ADMIN_MEDIA_PATH}/`), disabled: false },
+    ],
   },
   {
     label: 'Commercial',

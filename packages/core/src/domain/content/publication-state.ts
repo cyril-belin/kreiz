@@ -22,9 +22,26 @@ import { ContentDataCorruptedError } from './errors.js';
 export function resolvePublishedProjection(
   entry: Pick<
     KreizContentEntry,
-    'id' | 'status' | 'title' | 'slug' | 'data' | 'seo' | 'publishedSlug' | 'publishedTitle' | 'publishedData' | 'publishedSeo'
+    | 'id'
+    | 'status'
+    | 'title'
+    | 'slug'
+    | 'data'
+    | 'seo'
+    | 'publishedSlug'
+    | 'publishedTitle'
+    | 'publishedData'
+    | 'publishedSeo'
+    | 'publishedCoverMediaId'
   >,
-): { title: string; slug: string; data: Record<string, unknown>; seo: KreizContentEntry['seo'] } {
+): {
+  title: string;
+  slug: string;
+  data: Record<string, unknown>;
+  seo: KreizContentEntry['seo'];
+  /** Couverture figée à la publication (slice 5) — `null` = pas de couverture publique. */
+  coverMediaId: string | null;
+} {
   if (entry.status !== 'published') {
     throw new ContentDataCorruptedError(entry.id, 'projection publique demandée sur un contenu non publié');
   }
@@ -44,6 +61,7 @@ export function resolvePublishedProjection(
     slug: entry.publishedSlug,
     data: entry.publishedData,
     seo: entry.publishedSeo,
+    coverMediaId: entry.publishedCoverMediaId,
   };
 }
 
@@ -58,7 +76,17 @@ export function resolvePublishedProjection(
 export function hasUnpublishedChanges(
   entry: Pick<
     KreizContentEntry,
-    'status' | 'title' | 'slug' | 'data' | 'seo' | 'publishedSlug' | 'publishedTitle' | 'publishedData' | 'publishedSeo'
+    | 'status'
+    | 'title'
+    | 'slug'
+    | 'data'
+    | 'seo'
+    | 'coverMediaId'
+    | 'publishedSlug'
+    | 'publishedTitle'
+    | 'publishedData'
+    | 'publishedSeo'
+    | 'publishedCoverMediaId'
   >,
 ): boolean {
   if (entry.status !== 'published') return false;
@@ -68,6 +96,7 @@ export function hasUnpublishedChanges(
     entry.title !== entry.publishedTitle ||
     entry.publishedData === null ||
     entry.publishedSeo === null ||
+    entry.coverMediaId !== entry.publishedCoverMediaId ||
     canonicalJson(entry.data) !== canonicalJson(entry.publishedData) ||
     canonicalJson(entry.seo) !== canonicalJson(entry.publishedSeo)
   );

@@ -24,6 +24,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.1",
     "drizzle-orm": "^0.45.2",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
@@ -33,6 +34,7 @@
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",
     "pg": "^8.23.0",
+    "s3rver": "^3.7.1",
     "typescript": "6.0.3"
   }
 }

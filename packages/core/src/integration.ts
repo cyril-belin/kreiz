@@ -15,6 +15,13 @@ import {
   ADMIN_HOME_PATH,
   ADMIN_LOGIN_PATH,
   ADMIN_LOGOUT_PATH,
+  ADMIN_MEDIA_ALT_PATTERN,
+  ADMIN_MEDIA_CONFIRM_PATTERN,
+  ADMIN_MEDIA_DELETE_PATTERN,
+  ADMIN_MEDIA_PATH,
+  ADMIN_MEDIA_RETRY_PATTERN,
+  ADMIN_MEDIA_STATUS_PATTERN,
+  ADMIN_MEDIA_UPLOAD_REQUEST_PATH,
   ADMIN_PREVIEW_PATTERN,
   ADMIN_REBUILD_PATH,
 } from './http/admin-routes.js';
@@ -94,8 +101,9 @@ export function kreiz(input?: KreizConfig): AstroIntegration {
             // Argon2id embarque un binaire natif (.node) : il doit rester
             // externe au bundle serveur (chargé au runtime depuis
             // node_modules, tracé par l'adaptateur de déploiement) — le
-            // bundler ne peut pas le charger comme module JS.
-            ssr: { external: ['@node-rs/argon2'] },
+            // bundler ne peut pas le charger comme module JS. Même raison
+            // pour Sharp (slice 5, transformation d'images).
+            ssr: { external: ['@node-rs/argon2', 'sharp'] },
           },
         });
 
@@ -175,6 +183,46 @@ export function kreiz(input?: KreizConfig): AstroIntegration {
         injectRoute({
           pattern: ADMIN_PREVIEW_PATTERN,
           entrypoint: fileURLToPath(new URL('./admin/pages/preview.astro', import.meta.url)),
+          prerender: false,
+        });
+
+        // Médias (slice 5) — médiathèque, upload présigné, confirmation,
+        // polling, alt, retry, suppression. Toutes SSR sous /admin.
+        injectRoute({
+          pattern: ADMIN_MEDIA_PATH,
+          entrypoint: fileURLToPath(new URL('./admin/pages/media/index.astro', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_MEDIA_UPLOAD_REQUEST_PATH,
+          entrypoint: fileURLToPath(
+            new URL('./admin/routes/media-upload-request.js', import.meta.url),
+          ),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_MEDIA_CONFIRM_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/media-confirm.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_MEDIA_STATUS_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/media-status.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_MEDIA_ALT_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/media-alt.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_MEDIA_RETRY_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/media-retry.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_MEDIA_DELETE_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/media-delete.js', import.meta.url)),
           prerender: false,
         });
       },

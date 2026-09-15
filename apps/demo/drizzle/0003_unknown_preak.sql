@@ -1,0 +1,2 @@
+ALTER TABLE "kreiz_content_entries" ADD COLUMN "published_cover_media_id" uuid;--> statement-breakpoint
+ALTER TABLE "kreiz_content_entries" ADD CONSTRAINT "kreiz_content_entries_published_cover_media_id_kreiz_media_id_fk" FOREIGN KEY ("published_cover_media_id") REFERENCES "public"."kreiz_media"("id") ON DELETE restrict ON UPDATE no action;

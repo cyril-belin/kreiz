@@ -18,12 +18,17 @@ layer (Argon2id credentials, revocable server-side sessions, guards, CSRF, login
 limiting, append-only audit, the `kreiz` CLI and the `/admin` shell), the slice 3 content
 engine (code-declared content types, generic admin CRUD with generated forms, slugs with
 route namespaces, draft management, soft delete, content audit and SSR preview rendering the
-project's real templates) and the slice 4 publication layer (publish/unpublish with a frozen
+project's real templates), the slice 4 publication layer (publish/unpublish with a frozen
 "last public state", a platform-agnostic `RebuildTrigger` port with a Vercel deploy-hook
 reference adapter, automatic 301 redirects on published slug changes with chain
 normalization and loop prevention, build-time redirect materialization and a manual rebuild
-action). Features listed in the roadmap below that are not covered by these slices are
-planned, not shipped.
+action) and the slice 5 media pipeline (direct presigned browser uploads to any
+S3-compatible object storage behind an `ObjectStorage` port, server-side verification of the
+uploaded object, an explicit `uploading → processing → ready | failed` lifecycle, async
+Sharp variants behind `ImageTransformer` and `BackgroundJobs` ports, a media library with
+retry/recovery, content cover selection and public snapshotting, responsive
+`<picture>` helpers). Features listed in the roadmap below that are not covered by these
+slices are planned, not shipped.
 
 ## Current architecture
 
@@ -56,6 +61,20 @@ planned, not shipped.
   automatic 301 redirects with write-time chain normalization and loop prevention,
   materialized at build time through Astro's native `redirects` config (verified in the
   real Vercel output)
+- Media: direct presigned uploads — the browser sends the file straight to an
+  S3-compatible object storage (R2/S3/MinIO) behind the `ObjectStorage` port (reference
+  adapter with in-house AWS Signature V4, no provider SDK), while the server verifies the
+  **real** object (size, magic bytes) before flipping `uploading → processing`. Variants
+  (400/800/1400/2000 px, WebP + AVIF, no upscaling, EXIF stripped) are generated
+  asynchronously via the `ImageTransformer` (Sharp reference adapter) and `BackgroundJobs`
+  ports (`waitUntil` on Vercel, fire-and-forget in dev, recovery services for a future
+  cron). Originals stay private; only variants are public and immutable
+  (`Cache-Control: immutable`). Content covers are a system column with their own public
+  snapshot (`published_cover_media_id` — Save != Publish holds for covers too), only
+  `ready` media can be published, and the build reader resolves covers into a stable view
+  model consumed by the project's templates (responsive `<picture>` helpers in
+  `@kreiz/core/media`). Storage is configured via the `KREIZ_STORAGE_*` runtime env
+  (optional, all-or-nothing; see `apps/demo/.env.example`)
 - The `kreiz` CLI creates the first admin and resets passwords (`admin:create`,
   `admin:reset-password`)
 - Project → core configuration flows through a typed Vite virtual module,

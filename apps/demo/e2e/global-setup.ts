@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { closeTestDb } from './db';
 import { requireDatabaseUrl } from './env';
 import { startHookServer } from './rebuild-hook-server';
+import { startStorageServer } from './storage-server';
 
 /**
  * Préparation de l'E2E : crée les comptes admin **via le CLI `kreiz`**
@@ -52,6 +53,7 @@ function createAdminViaCli(email: string, name: string): void {
 
 export default function globalSetup(): void {
   startHookServer();
+  startStorageServer();
   try {
     createAdminViaCli(adminEmail, 'Admin E2E');
     createAdminViaCli(victimEmail, 'Victime E2E');
