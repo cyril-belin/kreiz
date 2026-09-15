@@ -25,6 +25,8 @@ import {
   formValuesFromData,
   mergeContentFieldErrors,
 } from '../../lib/content-page.js';
+import { readyPickerItems } from '../../lib/media-picker.js';
+import { collectRichTextMediaIds } from '../../../domain/content/view-model.js';
 
 const access = await authenticateContentPage(Astro);
 if (access.kind === 'unauthenticated') {
@@ -93,10 +95,26 @@ let fieldValues: Record<string, FormFieldValue> = formValuesFromData(
 let fieldErrors: Record<string, string> = {};
 let formError: string | null = null;
 
-// Pickers de couverture : médias `ready` uniquement (mission §29).
+// Pickers de couverture et rich text : médias `ready` uniquement (mission
+// §29, slice 6 §11). Les items portent la miniature pour le picker éditeur.
 const readyMedia = access.runtime.mediaAdmin
   ? (await access.runtime.mediaAdmin.listReady()).map((media) => ({ id: media.id, alt: media.altText }))
   : [];
+const pickerItems = readyPickerItems(
+  access.runtime.mediaAdmin ? await access.runtime.mediaAdmin.listReady() : [],
+  access.runtime.mediaPublicBaseUrl,
+);
+
+// Miniatures additionnelles pour les médias référencés par le document mais
+// hors de la fenêtre du listing `ready` (au-delà de 200) : l'éditeur doit
+// toujours pouvoir afficher le document courant.
+const referencedIds = collectRichTextMediaIds(declaration?.fields ?? {}, loaded?.entry.data ?? {});
+for (const id of referencedIds) {
+  if (pickerItems.some((item) => item.id === id)) continue;
+  const row = access.runtime.mediaAdmin ? await access.runtime.mediaAdmin.findById(id) : null;
+  const [item] = readyPickerItems(row ? [row] : [], access.runtime.mediaPublicBaseUrl);
+  if (item) pickerItems.push(item);
+}
 
 /** Miniature de la couverture courante — plus petite variante WebP (serveur). */
 function coverThumbnail(
@@ -355,7 +373,12 @@ if (loaded && Astro.request.method === 'POST') {
               {fieldErrors.slug && <p class="kz-field-error" role="alert">{fieldErrors.slug}</p>}
             </div>
 
-            <ContentFormFields fields={declaration.fields} values={fieldValues} errors={fieldErrors} />
+            <ContentFormFields
+              fields={declaration.fields}
+              values={fieldValues}
+              errors={fieldErrors}
+              pickerItems={pickerItems}
+            />
 
             <CoverPicker
               readyMedia={readyMedia}

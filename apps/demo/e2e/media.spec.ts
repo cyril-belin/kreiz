@@ -223,7 +223,7 @@ test.describe('back-office — médias (slice 5)', () => {
 
     // Création d'un Article avec la couverture A.
     await page.goto('/admin/content/article/new');
-    await page.getByLabel('Titre').fill(`Article média ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article média ${runId}`);
     await page.getByLabel('Accroche').fill('Accroche couverture.');
     await page.getByLabel('Corps').fill('Corps de l’article média.');
     await page.getByLabel('Auteur').fill('Auteure Média');
@@ -362,7 +362,7 @@ test.describe('back-office — médias (slice 5)', () => {
       .getByRole('button', { name: 'Supprimer' })
       .click();
     await expect(page).toHaveURL(/delete=in-use/);
-    await expect(page.locator('.kz-banner--warning')).toContainText(/utilisé comme couverture/i);
+    await expect(page.locator('.kz-banner--warning')).toContainText(/utilisé par au moins un contenu/i);
     const rowsAfterRefusal = await query<{ id: string }>('select id from kreiz_media where id = $1', [state.coverBId]);
     expect(rowsAfterRefusal).toHaveLength(1);
 

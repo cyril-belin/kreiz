@@ -23,6 +23,7 @@ import {
 } from '../domain/content/redirect-engine.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
 import { resolvePublicMediaView } from '../domain/media/view-model.js';
+import { loadRichTextMediaMap, validateRichTextMediaForPublish } from '../content/rich-text-media.js';
 import {
   contentFieldErrorMessage,
   validateContentTitle,
@@ -108,11 +109,13 @@ export function createPublicationService(deps: PublicationServiceDeps) {
   }
 
   /**
-   * Valide l'état éditorial **courant** avant publication : titre commun,
-   * JSONB spécifique contre le schéma strict du type, et couverture
+   * Valide l’état éditorial **courant** avant publication : titre commun,
+   * JSONB spécifique contre le schéma strict du type, couverture
    * **`ready`** (mission §29 — le contenu publié ne référence jamais une
-   * image `processing`/`failed` ; la validation est ici, pas au rendu).
-   * Toute invalidité échoue **avant** la moindre écriture (mission §4).
+   * image `processing`/`failed` ; la validation est ici, pas au rendu) et
+   * **médias du rich text** (slice 6 §12 : existence, `ready`, alt — la
+   * validation du document lui-même vient du schéma dérivé). Toute
+   * invalidité échoue **avant** la moindre écriture (mission §4).
    */
   async function validateForPublish(
     declaration: ResolvedContentTypeDeclaration,
@@ -129,7 +132,7 @@ export function createPublicationService(deps: PublicationServiceDeps) {
     if (entry.coverMediaId) {
       const mediaRow = await media.findById(entry.coverMediaId);
       if (!mediaRow || mediaRow.deletedAt) {
-        errors.cover = "La couverture sélectionnée n'existe plus.";
+        errors.cover = "La couverture sélectionnée n’existe plus.";
       } else if (mediaRow.status !== 'ready') {
         errors.cover =
           'La couverture doit être un média prêt (ready) pour publier — réessayez une fois le traitement terminé.';
@@ -141,10 +144,21 @@ export function createPublicationService(deps: PublicationServiceDeps) {
       }
     }
 
-    if (parsed.success && Object.keys(errors).length === 0) {
-      return { title, data: parsed.data as Record<string, unknown>, cover };
-    }
-    if (!parsed.success) {
+    if (parsed.success) {
+      const data = parsed.data as Record<string, unknown>;
+      // Médias du rich text (slice 6) — après la validation de forme : on ne
+      // vérifie les références que d’un document structurellement valide.
+      await validateRichTextMediaForPublish(
+        media,
+        deps.mediaPublicBaseUrl,
+        declaration.fields,
+        data,
+        errors,
+      );
+      if (Object.keys(errors).length === 0) {
+        return { title, data, cover };
+      }
+    } else {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         const key = typeof field === 'string' ? field : '_form';
@@ -178,11 +192,19 @@ export function createPublicationService(deps: PublicationServiceDeps) {
       const declaration = requireDeclaration(existing.contentType);
 
       // Validation avant tout effet de bord (mission §4) — couverture
-      // `ready` comprise (mission §29).
+      // `ready` et médias du rich text compris (mission §29, slice 6 §12).
       const validated = await validateForPublish(declaration, existing);
       if ('errors' in validated) {
         return { kind: 'invalid', errors: validated.errors };
       }
+      // Médias du rich text prouvés prêts : la vue retournée est rendue
+      // strictement (une référence non résolue resterait une corruption).
+      const richTextMedia = await loadRichTextMediaMap(
+        media,
+        deps.mediaPublicBaseUrl,
+        declaration.fields,
+        validated.data,
+      );
 
       // Plan de redirection — uniquement si le slug **public** change
       // (mission §18 : un changement de slug d'un simple draft ne crée
@@ -270,7 +292,10 @@ export function createPublicationService(deps: PublicationServiceDeps) {
       return {
         kind: 'published',
         entry: published,
-        view: resolveContentViewModel(declaration, published, { cover: validated.cover }),
+        view: resolveContentViewModel(declaration, published, {
+          cover: validated.cover,
+          richTextMedia,
+        }),
         redirect,
         rebuild,
       };

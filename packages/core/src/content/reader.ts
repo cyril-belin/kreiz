@@ -4,8 +4,13 @@ import { createMediaRepository } from '../data/repositories/media.js';
 import type { ContentTypeDefinition, InferContentTypeData } from '../domain/content/declaration.js';
 import { ContentDataCorruptedError } from '../domain/content/errors.js';
 import { resolvePublishedProjection } from '../domain/content/publication-state.js';
-import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
+import {
+  collectRichTextMediaIds,
+  resolveContentViewModel,
+  type ContentView,
+} from '../domain/content/view-model.js';
 import { resolvePublicMediaView } from '../domain/media/view-model.js';
+import { buildRichTextMediaMap, loadRichTextMediaMap } from './rich-text-media.js';
 
 /**
  * Lecteur de contenu **public** pour le build Astro du Project (cadrage §9 :
@@ -29,9 +34,10 @@ import { resolvePublicMediaView } from '../domain/media/view-model.js';
  * leur dernier état effectivement public** (colonnes snapshot `published_*`,
  * figées par Publish — mission §5, §20) : l'URL générée est `published_slug`,
  * jamais le slug éditorial courant. Un Save — même sur un contenu publié —
- * ne change donc jamais la sortie du build (contrat Save != Publish),
- * **couverture comprise** : la page lit `published_cover_media_id`
- * (mission slice 5 §28), jamais la couverture éditoriale courante.
+ * ne change jamais la sortie du build (contrat Save != Publish),
+ * **couverture et médias du rich text compris** : la page lit
+ * `published_cover_media_id` et `published_data` (mission slice 5 §28,
+ * slice 6), jamais l'état éditorial courant.
  *
  * La couverture est résolue **batch** (une requête pour toutes les pages) et
  * **`ready` uniquement** (mission §29) : un snapshot pointant un média
@@ -102,6 +108,21 @@ export function createContentReader(options: {
         published: resolvePublishedProjection(row),
       }));
       const covers = await resolveCovers(projections.map(({ published }) => published.coverMediaId));
+      // Médias du rich text — **un seul** appel batch pour toutes les pages
+      // du type (slice 6 §15) : un snapshot référençant un média absent ou
+      // non prêt est une corruption, le build échoue explicitement.
+      const richTextIds = [
+        ...new Set(
+          projections.flatMap(({ published }) =>
+            collectRichTextMediaIds(declaration.fields, published.data),
+          ),
+        ),
+      ];
+      const richTextMedia = await buildRichTextMediaMap(
+        media,
+        options.mediaPublicBaseUrl ?? null,
+        richTextIds,
+      );
       const views: Array<ContentView<InferContentTypeData<typeof declaration>>> = [];
       for (const { row, published } of projections) {
         views.push(
@@ -114,7 +135,10 @@ export function createContentReader(options: {
               data: published.data,
               seo: published.seo,
             },
-            { cover: published.coverMediaId ? covers.get(published.coverMediaId) ?? null : null },
+            {
+              cover: published.coverMediaId ? covers.get(published.coverMediaId) ?? null : null,
+              richTextMedia,
+            },
           ),
         );
       }
@@ -134,6 +158,12 @@ export function createContentReader(options: {
       if (!row) return null;
       const published = resolvePublishedProjection(row);
       const covers = await resolveCovers([published.coverMediaId]);
+      const richTextMedia = await loadRichTextMediaMap(
+        media,
+        options.mediaPublicBaseUrl ?? null,
+        declaration.fields,
+        published.data,
+      );
       return resolveContentViewModel(
         declaration,
         {
@@ -143,7 +173,10 @@ export function createContentReader(options: {
           data: published.data,
           seo: published.seo,
         },
-        { cover: published.coverMediaId ? covers.get(published.coverMediaId) ?? null : null },
+        {
+          cover: published.coverMediaId ? covers.get(published.coverMediaId) ?? null : null,
+          richTextMedia,
+        },
       );
     },
   };

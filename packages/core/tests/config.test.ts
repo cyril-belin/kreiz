@@ -61,7 +61,7 @@ describe('kreizConfigSchema', () => {
           types: [
             {
               ...articleDefinition(),
-              fields: { body: { kind: 'richText', label: 'Corps' } },
+              fields: { body: { kind: 'pluginWidget', label: 'Corps' } },
             },
           ],
         },

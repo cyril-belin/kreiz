@@ -184,6 +184,42 @@ export function createMediaRepository(db: KreizDatabase) {
     },
 
     /**
+     * Nombre de contenus (y compris soft-deleted) référençant le média dans
+     * un **corps rich text** (slice 6) — champ `mediaId` d'un node média,
+     * état éditorial courant ou snapshot publié. Requête JSONB structurelle
+     * (`jsonb_path_exists` + descente récursive `$.**.mediaId`) : pas de
+     * recherche texte naïve — la même définition de « référence » que
+     * `extractRichTextMediaIds` (toute profondeur de listes/citations).
+     * Aucune FK possible dans du JSONB : ce comptage est la seule garde,
+     * en complément du refus explicite côté service.
+     */
+    async countRichTextReferences(mediaId: string): Promise<number> {
+      const params = sql`jsonb_build_object('id', ${mediaId}::text)`;
+      const path = sql.raw("'lax $.**.mediaId ? (@ == $id)'");
+      const rows = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(contentEntries)
+        .where(
+          sql`(jsonb_path_exists(${contentEntries.data}, ${path}, ${params}) or jsonb_path_exists(${contentEntries.publishedData}, ${path}, ${params}))`,
+        );
+      return rows.at(0)?.count ?? 0;
+    },
+
+    /**
+     * Usage total d'un média — couverture (courante ou snapshot) **plus**
+     * références rich text (courantes ou snapshot). Une seule question :
+     * « ce média est-il utilisé ? » — la réponse ne doit jamais dépendre de
+     * l'endroit où la référence vit (slice 6 §13).
+     */
+    async countContentReferences(mediaId: string): Promise<number> {
+      const [cover, richText] = await Promise.all([
+        this.countCoverReferences(mediaId),
+        this.countRichTextReferences(mediaId),
+      ]);
+      return cover + richText;
+    },
+
+    /**
      * Suppression physique d'un média **non référencé** (mission §26) :
      * la ligne part, les objets storage sont supprimés par le service.
      * Un média référencé provoque une 23001 (RESTRICT) — le service ne

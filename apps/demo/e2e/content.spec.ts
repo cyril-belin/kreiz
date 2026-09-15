@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { query } from './db';
+import { bodyText } from './richtext';
 
 /**
  * Parcours critiques du slice 3 — moteur de contenu (mission §35). Tout le
@@ -34,7 +35,7 @@ async function createArticleDraft(
   },
 ): Promise<void> {
   await page.goto('/admin/content/article/new');
-  await page.getByLabel('Titre').fill(values.title);
+  await page.getByRole('textbox', { name: 'Titre' }).fill(values.title);
   if (values.slug) await page.getByLabel('Slug').fill(values.slug);
   await page.getByLabel('Accroche').fill(values.excerpt);
   await page.getByLabel('Corps').fill(values.body);
@@ -71,15 +72,15 @@ test.describe('back-office — moteur de contenu', () => {
     await page.goto('/admin/content/article/new');
 
     const title = 'Article E2E création';
-    await page.getByLabel('Titre').fill(title);
+    await page.getByRole('textbox', { name: 'Titre' }).fill(title);
     await page.getByLabel('Accroche').fill('Accroche du test E2E.');
-    await page.getByLabel('Corps').fill('Premier paragraphe.\n\nDeuxième paragraphe.');
+    await page.getByLabel('Corps').fill('Paragraphe unique du corps E2E.');
     await page.getByLabel('Auteur').fill('Auteure E2E');
     await page.getByRole('button', { name: 'Enregistrer le brouillon' }).click();
 
     // Retour sur la page d'édition du brouillon créé.
     await expect(page).toHaveURL(/\/admin\/content\/article\/[0-9a-f-]{36}$/);
-    await expect(page.getByLabel('Titre')).toHaveValue(title);
+    await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue(title);
     await expect(page.getByLabel('Accroche')).toHaveValue('Accroche du test E2E.');
     await expect(page.getByLabel('Auteur')).toHaveValue('Auteure E2E');
 
@@ -110,7 +111,7 @@ test.describe('back-office — moteur de contenu', () => {
     await login(page);
     await page.goto('/admin/content/article/new');
 
-    await page.getByLabel('Titre').fill('Article E2E invalide');
+    await page.getByRole('textbox', { name: 'Titre' }).fill('Article E2E invalide');
     // Accroche (requis) laissée vide.
     await page.getByLabel('Corps').fill('Corps présent.');
     await page.getByLabel('Auteur').fill('Auteure E2E');
@@ -119,7 +120,7 @@ test.describe('back-office — moteur de contenu', () => {
     // Re-rendu du formulaire avec erreurs de champ, valeurs préservées.
     await expect(page).toHaveURL(/\/admin\/content\/article\/new$/);
     await expect(page.getByText('Ce champ est requis.').first()).toBeVisible();
-    await expect(page.getByLabel('Titre')).toHaveValue('Article E2E invalide');
+    await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue('Article E2E invalide');
 
     const rows = await query<{ count: string }>(
       'select count(*)::text as count from kreiz_content_entries where title = $1',
@@ -147,7 +148,7 @@ test.describe('back-office — moteur de contenu', () => {
     // Collision manuelle à la création : erreur explicite (jamais suffixée
     // en silence — le choix d'un admin ne se modifie pas tout seul).
     await page.goto('/admin/content/article/new');
-    await page.getByLabel('Titre').fill('Article E2E collision');
+    await page.getByRole('textbox', { name: 'Titre' }).fill('Article E2E collision');
     await page.getByLabel('Slug').fill('article-e2e-slug-choisi');
     await page.getByLabel('Accroche').fill('Accroche.');
     await page.getByLabel('Corps').fill('Corps.');
@@ -191,13 +192,16 @@ test.describe('back-office — moteur de contenu', () => {
     // Redirect 303 + bandeau de confirmation, valeurs fraîches re-rendues.
     await expect(page).toHaveURL(new RegExp(`/admin/content/article/${id}\\?saved=1$`));
     await expect(page.getByText('Brouillon enregistré.')).toBeVisible();
-    await expect(page.getByLabel('Corps')).toHaveValue('Corps modifié par E2E.');
+    // L'éditeur contenteditable expose son texte, pas de `.value`.
+    await expect(page.getByLabel('Corps')).toContainText('Corps modifié par E2E.');
 
-    const rows = await query<{ data: { body: string } }>(
+    const rows = await query<{ data: { body: unknown } }>(
       'select data from kreiz_content_entries where id = $1',
       [id],
     );
-    expect(rows[0]!.data.body).toBe('Corps modifié par E2E.');
+    // Le corps est stocké comme document canonique (slice 6), pas une chaîne.
+    expect(bodyText(rows[0]!.data.body)).toBe('Corps modifié par E2E.');
+    expect(rows[0]!.data.body).toMatchObject({ version: 1, type: 'doc' });
   });
 
   test('preview : brouillon rendu avec le vrai template du Project, authentifiée, noindex', async ({

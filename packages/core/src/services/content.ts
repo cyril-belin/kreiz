@@ -13,6 +13,7 @@ import {
 } from '../domain/content/errors.js';
 import { normalizeSlugInput, slugCandidates, slugify, SLUG_FALLBACK } from '../domain/content/slug.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
+import { resolveReadyRichTextMediaMap } from '../content/rich-text-media.js';
 import type { RebuildRequestReason, RebuildTrigger, RebuildTriggerResult } from '../ports/rebuild.js';
 import { auditRebuildFailure } from './rebuild-audit.js';
 
@@ -188,6 +189,30 @@ export function createContentService(deps: ContentServiceDeps) {
     return resolvePublicMediaView(mediaRow, { publicBaseUrl: deps.mediaPublicBaseUrl });
   }
 
+  /**
+   * Vue d'un contenu avec rich text résolu — **best-effort** (admin) : les
+   * médias prêts sont rendus, un média non prêt omet sa figure (comme une
+   * couverture non prête, mission §29) sans jamais empêcher l'édition ou la
+   * preview d'un brouillon. La publication, elle, valide strictement
+   * (service de publication + `validateRichTextMediaForPublish`).
+   */
+  async function resolveAdminView(
+    declaration: ResolvedContentTypeDeclaration,
+    entry: KreizContentEntry,
+  ): Promise<ContentView<unknown>> {
+    const richTextMedia = await resolveReadyRichTextMediaMap(
+      deps.media,
+      deps.mediaPublicBaseUrl,
+      declaration.fields,
+      entry.data,
+    );
+    return resolveContentViewModel(declaration, entry, {
+      cover: await resolveCoverView(entry.coverMediaId),
+      richTextMedia,
+      richTextStrict: false,
+    });
+  }
+
   return {
     /** Registre résolu des types déclarés — les routes y retrouvent leurs déclarations. */
     registry,
@@ -262,9 +287,7 @@ export function createContentService(deps: ContentServiceDeps) {
           return {
             kind: 'created',
             entry,
-            view: resolveContentViewModel(declaration, entry, {
-              cover: await resolveCoverView(entry.coverMediaId),
-            }),
+            view: await resolveAdminView(declaration, entry),
           };
         } catch (error) {
           // Course concurrentielle sur l'index unique partiel : candidat
@@ -366,9 +389,7 @@ export function createContentService(deps: ContentServiceDeps) {
         return {
           kind: 'updated',
           entry: updated,
-          view: resolveContentViewModel(declaration, updated, {
-            cover: await resolveCoverView(updated.coverMediaId),
-          }),
+          view: await resolveAdminView(declaration, updated),
         };
       } catch (error) {
         // Course concurrentielle : le slug a été pris entre la vérification
@@ -417,9 +438,7 @@ export function createContentService(deps: ContentServiceDeps) {
       return {
         entry,
         declaration,
-        view: resolveContentViewModel(declaration, entry, {
-          cover: await resolveCoverView(entry.coverMediaId),
-        }),
+        view: await resolveAdminView(declaration, entry),
       };
     },
 

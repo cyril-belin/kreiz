@@ -51,13 +51,9 @@ const publishedDate = view.publishedAt
 
         {view.cover && <CoverPicture cover={view.cover} />}
 
-        <div class="mt-8 space-y-4 leading-relaxed text-neutral-200">
-          {
-            view.data.body
-              .split(/\n\s*\n/)
-              .map((paragraph) => <p>{paragraph}</p>)
-          }
-        </div>
+        {/* Rich text (slice 6) — même contrat que l'article : source unique
+        = renderer déterministe du Core. */}
+        <div class="mt-8 space-y-4 leading-relaxed text-neutral-200" set:html={view.richText.body?.html} />
       </article>
 
       <footer class="mt-16 border-t border-neutral-800 pt-6 text-sm text-neutral-500">

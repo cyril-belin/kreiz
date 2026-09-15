@@ -2,9 +2,9 @@ import { defineContentType, fields, type InferContentTypeData } from '@kreiz/cor
 
 /**
  * Type de contenu Article — déclaration **du projet de démonstration**,
- * jamais du Core (cadrage §8). Champs spécifiques simples ; `body` est un
- * textarea simple au slice 3 (le rich text Tiptap arrive au slice 6, le
- * descripteur restera valable).
+ * jamais du Core (cadrage §8). `body` est un document riche structuré
+ * (slice 6) : format canonique Kreiz édité par Tiptap côté admin, rendu par
+ * le renderer déterministe côté public — jamais du HTML stocké.
  */
 export const articleType = defineContentType({
   key: 'article',
@@ -18,11 +18,10 @@ export const articleType = defineContentType({
       required: true,
       maxLength: 300,
     }),
-    body: fields.textarea({
+    body: fields.richText({
       label: 'Corps',
-      help: 'Texte intégral. Paragraphes séparés par des lignes vides.',
+      help: 'Texte intégral : titres, listes, citations, liens et images de la médiathèque.',
       required: true,
-      maxLength: 20_000,
     }),
     author: fields.text({
       label: 'Auteur',

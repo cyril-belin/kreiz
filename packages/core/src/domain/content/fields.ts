@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { KreizRichTextDocument } from './rich-text/document.js';
 
 /**
  * Vocabulaire de champs V1 du moteur de contenu (cadrage §8, mission §5).
@@ -12,8 +13,10 @@ import { z } from 'zod';
  *
  * V1 — volontairement borné :
  * - `text` : texte court ;
- * - `textarea` : texte long simple (le rich text Tiptap arrive au slice 6 —
- *   ce descripteur restera valable, aucun champ provisoire à retirer) ;
+ * - `textarea` : texte long simple (reste valable — le rich text ne le
+ *   remplace pas, voir slice 6) ;
+ * - `richText` : document structuré canonique Kreiz (slice 6 — édité par
+ *   Tiptap côté admin, rendu par le renderer déterministe côté public) ;
  * - `select` : liste fermée déclarée en code ;
  * - `url` : URL absolue http(s) validée ;
  * - `date` : date ISO `YYYY-MM-DD` ;
@@ -21,8 +24,8 @@ import { z } from 'zod';
  * - `list` : liste simple typée (items `text` ou `metric`).
  *
  * Hors périmètre du slice 3 (arriveront avec leurs slices, sans casser les
- * déclarations existantes) : `richText` (slice 6), `media` (slice 5),
- * relations et blocks libres.
+ * déclarations existantes) : `media` (slice 5, champ système), relations et
+ * blocks libres.
  */
 
 // ——— Descripteurs ———
@@ -50,6 +53,18 @@ export interface TextareaFieldDescriptor extends FieldCommonOptions {
   kind: 'textarea';
   /** Longueur maximale (défaut 20 000 — borne anti-abus, pas une règle éditoriale). */
   maxLength?: number;
+}
+
+/**
+ * Document riche structuré (slice 6) — format canonique Kreiz
+ * (`RichTextDocument`, voir `domain/content/rich-text/`). La valeur stockée
+ * dans `data` est un **objet document validé** (version, nodes et marks
+ * whitelistés) — jamais du HTML. Les bornes (taille, profondeur, liens)
+ * appartiennent à la politique du format, pas au descripteur : le descripteur
+ * ne porte que du sens éditorial.
+ */
+export interface RichTextFieldDescriptor extends FieldCommonOptions {
+  kind: 'richText';
 }
 
 export interface SelectChoice<C extends string = string> {
@@ -94,6 +109,7 @@ export interface ListFieldDescriptor<I extends FieldDescriptor = FieldDescriptor
 export type FieldDescriptor =
   | TextFieldDescriptor
   | TextareaFieldDescriptor
+  | RichTextFieldDescriptor
   | SelectFieldDescriptor
   | UrlFieldDescriptor
   | DateFieldDescriptor
@@ -113,7 +129,9 @@ export type FieldValue<D> = D extends ListFieldDescriptor<infer I>
     ? C
     : D extends MetricFieldDescriptor
       ? { label: string; value: string }
-      : string;
+      : D extends RichTextFieldDescriptor
+        ? KreizRichTextDocument
+        : string;
 
 /** Mapping `data` complet dérivé d'un enregistrement de descripteurs. */
 export type FieldsData<F extends Record<string, FieldDescriptor>> = {
@@ -143,6 +161,9 @@ export const fields = {
   },
   textarea(options: Omit<TextareaFieldDescriptor, 'kind'>): TextareaFieldDescriptor {
     return { kind: 'textarea', ...options };
+  },
+  richText(options: Omit<RichTextFieldDescriptor, 'kind'>): RichTextFieldDescriptor {
+    return { kind: 'richText', ...options };
   },
   select<C extends string>(options: Omit<SelectFieldDescriptor<C>, 'kind'>): SelectFieldDescriptor<C> {
     return { kind: 'select', ...options };
@@ -188,6 +209,7 @@ export const fieldDescriptorSchema: z.ZodType<FieldDescriptor> = z.lazy(() =>
       ...fieldCommonShape,
       maxLength: z.number().int().min(1).max(100_000).optional(),
     }),
+    z.strictObject({ kind: z.literal('richText'), ...fieldCommonShape }),
     z.strictObject({
       kind: z.literal('select'),
       ...fieldCommonShape,

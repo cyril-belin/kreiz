@@ -3,6 +3,8 @@ export const prerender = false;
 
 import type { FieldDescriptor } from '../../domain/content/fields.js';
 import type { FormFieldValue } from '../../http/content-form.js';
+import { emptyRichTextDocument } from '../../domain/content/rich-text/document.js';
+import type { RichTextPickerItem } from '../lib/media-picker.js';
 
 /**
  * Rendu admin des champs d'un type de contenu — généré depuis la
@@ -14,15 +16,21 @@ import type { FormFieldValue } from '../../http/content-form.js';
  * Conventions de nommage (parseur `http/content-form.ts`) :
  * - champ scalaire : `name` ;
  * - métrique : `name:label` / `name:value` ;
- * - liste : plusieurs `name` (ou paires `name:label` / `name:value`).
+ * - liste : plusieurs `name` (ou paires `name:label` / `name:value`) ;
+ * - richText (slice 6) : `name` = `<input type="hidden">` portant le JSON
+ *   du document, rempli par le serveur et synchronisé par l'îlot Tiptap.
+ *   Sans JavaScript, la valeur serveur repart inchangée (aucune corruption)
+ *   — l'éditeur est une couche d'édition, jamais la source de la donnée.
  */
 interface Props {
   fields: Record<string, FieldDescriptor>;
   values: Record<string, FormFieldValue>;
   errors: Record<string, string>;
+  /** Médias `ready` pour le picker du rich text (serveur-résolus). */
+  pickerItems?: ReadonlyArray<RichTextPickerItem>;
 }
 
-const { fields, values, errors } = Astro.props;
+const { fields, values, errors, pickerItems = [] } = Astro.props;
 
 function stringValue(field: FormFieldValue | undefined, fallback = ''): string {
   return field?.kind === 'string' ? field.value : fallback;
@@ -45,6 +53,39 @@ function listMetricItems(
   const items = field?.kind === 'list-metric' ? field.items : [];
   return [...items, { label: '', value: '' }, { label: '', value: '' }];
 }
+
+const hasRichText = Object.values(fields).some((descriptor) => descriptor.kind === 'richText');
+
+const TOOLBAR_GROUPS: ReadonlyArray<ReadonlyArray<{ command: string; label: string; text: string }>> = [
+  [
+    { command: 'paragraph', label: 'Paragraphe', text: 'Paragraphe' },
+    { command: 'h2', label: 'Titre de niveau 2', text: 'Titre 2' },
+    { command: 'h3', label: 'Titre de niveau 3', text: 'Titre 3' },
+  ],
+  [
+    { command: 'bold', label: 'Gras', text: 'Gras' },
+    { command: 'italic', label: 'Italique', text: 'Italique' },
+    { command: 'strike', label: 'Barré', text: 'Barré' },
+    { command: 'code', label: 'Code en ligne', text: 'Code' },
+  ],
+  [
+    { command: 'bullet-list', label: 'Liste à puces', text: 'Puces' },
+    { command: 'ordered-list', label: 'Liste numérotée', text: 'Numéros' },
+  ],
+  [
+    { command: 'blockquote', label: 'Citation', text: 'Citation' },
+    { command: 'link', label: 'Insérer un lien', text: 'Lien' },
+    { command: 'unlink', label: 'Retirer le lien', text: 'Retirer le lien' },
+  ],
+  [
+    { command: 'hr', label: 'Séparateur horizontal', text: 'Séparateur' },
+    { command: 'image', label: 'Insérer une image de la médiathèque', text: 'Image' },
+  ],
+  [
+    { command: 'undo', label: 'Annuler la dernière action', text: 'Annuler' },
+    { command: 'redo', label: 'Rétablir la dernière action', text: 'Rétablir' },
+  ],
+];
 ---
 
 {
@@ -53,7 +94,7 @@ function listMetricItems(
     const fieldId = `kz-field-${name}`;
     return (
       <div class="kz-field">
-        <label class="kz-label" for={descriptor.kind === 'list' ? undefined : fieldId}>
+        <label class="kz-label" for={descriptor.kind === 'list' || descriptor.kind === 'richText' ? undefined : fieldId}>
           {descriptor.label}
           {descriptor.required ? <span class="kz-required" aria-hidden="true"> *</span> : null}
         </label>
@@ -172,7 +213,90 @@ function listMetricItems(
             ))}
           </div>
         )}
-        {error && (
+        {descriptor.kind === 'richText' && (() => {
+          const editorId = `${fieldId}-editor`;
+          const serialized = stringValue(values[name]) || JSON.stringify(emptyRichTextDocument());
+          return (
+            <div
+              class="kz-richtext"
+              data-kreiz-richtext
+              data-editor-label={descriptor.label}
+            >
+              <input
+                type="hidden"
+                id={fieldId}
+                name={name}
+                value={serialized}
+                data-role="richtext-value"
+                aria-invalid={error ? 'true' : undefined}
+              />
+              <div
+                class="kz-richtext__toolbar"
+                data-role="richtext-toolbar"
+                role="toolbar"
+                aria-label="Barre de mise en forme"
+                aria-controls={editorId}
+              >
+                {TOOLBAR_GROUPS.map((group) => (
+                  <span class="kz-richtext__group" role="group">
+                    {group.map((item) => (
+                      <button
+                        type="button"
+                        class="kz-richtext__button"
+                        data-command={item.command}
+                        aria-label={item.label}
+                        aria-pressed="false"
+                      >
+                        {item.text}
+                      </button>
+                    ))}
+                  </span>
+                ))}
+              </div>
+              <div class="kz-richtext__frame" aria-invalid={error ? 'true' : undefined}>
+                <div class="kz-richtext__editor" data-role="richtext-editor" />
+              </div>
+              <noscript>
+                <p class="kz-help">
+                  L’édition enrichie nécessite JavaScript. Sans JavaScript, le contenu enregistré
+                  est conservé tel quel lors de l’enregistrement du formulaire.
+                </p>
+              </noscript>
+              {error && (
+                <p class="kz-field-error" role="alert">
+                  {error}
+                </p>
+              )}
+              <dialog
+                class="kz-richtext-dialog"
+                data-role="richtext-link-dialog"
+                aria-labelledby={`${fieldId}-link-title`}
+              >
+                <h2 class="kz-richtext-dialog__title" id={`${fieldId}-link-title`}>Insérer un lien</h2>
+                <label class="kz-label" for={`${fieldId}-link-input`}>Adresse du lien</label>
+                <input
+                  class="kz-input"
+                  type="text"
+                  id={`${fieldId}-link-input`}
+                  data-role="richtext-link-input"
+                  placeholder="https://… ou /articles/…"
+                  maxlength="2048"
+                />
+                <p class="kz-help">
+                  http(s), mailto ou chemin interne (/…). Les liens externes s’ouvrent dans un
+                  nouvel onglet.
+                </p>
+                <p class="kz-field-error" data-role="richtext-link-error" hidden></p>
+                <div class="kz-richtext-dialog__actions">
+                  <button type="button" class="kz-button" data-role="richtext-link-apply">Appliquer</button>
+                  <button type="button" class="kz-button kz-button--ghost" data-role="richtext-link-remove">Retirer le lien</button>
+                  <button type="button" class="kz-button kz-button--ghost" data-role="richtext-link-cancel">Annuler</button>
+                </div>
+              </dialog>
+            </div>
+          );
+        })()}
+        {descriptor.kind !== 'richText' && error && (
           <p class="kz-field-error" role="alert">
             {error}
           </p>
@@ -181,3 +305,51 @@ function listMetricItems(
     );
   })
 }
+
+{hasRichText && (
+  <dialog
+    class="kz-richtext-dialog kz-richtext-picker"
+    data-role="richtext-picker"
+    aria-labelledby="kz-richtext-picker-title"
+  >
+    <h2 class="kz-richtext-dialog__title" id="kz-richtext-picker-title">Insérer une image</h2>
+    {pickerItems.length === 0 ? (
+      <p class="kz-help">Aucun média prêt — gérez les images dans la médiathèque (seuls les médias prêts peuvent être insérés).</p>
+    ) : (
+      <ul class="kz-richtext-picker__grid" role="list">
+        {pickerItems.map((item) => (
+          <li>
+            <button
+              type="button"
+              class="kz-richtext-picker__item"
+              data-role="richtext-pick"
+              data-media-id={item.id}
+              data-media-thumb={item.thumbnailUrl ?? ''}
+              data-media-alt={item.alt}
+              data-media-width={item.width != null ? String(item.width) : ''}
+              data-media-height={item.height != null ? String(item.height) : ''}
+            >
+              {item.thumbnailUrl && (
+                <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" />
+              )}
+              <span class="kz-richtext-picker__label">
+                {item.alt.length > 0 ? item.alt : `Image ${item.id.slice(0, 8)}`}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    )}
+    <div class="kz-richtext-dialog__actions">
+      <button type="button" class="kz-button kz-button--ghost" data-role="richtext-picker-close">
+        Annuler
+      </button>
+    </div>
+  </dialog>
+)}
+
+<script>
+  // Îlot Tiptap (slice 6) — bundle navigateur de l'admin uniquement ; le
+  // build public n'importe jamais ce module (frontière de bundle, §29).
+  import '../richtext/editor.js';
+</script>

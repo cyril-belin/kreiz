@@ -20,6 +20,7 @@ import {
   formValuesFromData,
   mergeContentFieldErrors,
 } from '../../lib/content-page.js';
+import { readyPickerItems } from '../../lib/media-picker.js';
 
 const access = await authenticateContentPage(Astro);
 if (access.kind === 'unauthenticated') {
@@ -37,10 +38,15 @@ let fieldValues: Record<string, FormFieldValue> = formValuesFromData(declaration
 let fieldErrors: Record<string, string> = {};
 let formError: string | null = null;
 
-// Pickers de couverture : médias `ready` uniquement (mission §29).
+// Pickers de couverture et rich text : médias `ready` uniquement (mission
+// §29, slice 6 §11).
 const readyMedia = access.runtime.mediaAdmin
   ? (await access.runtime.mediaAdmin.listReady()).map((media) => ({ id: media.id, alt: media.altText }))
   : [];
+const pickerItems = readyPickerItems(
+  access.runtime.mediaAdmin ? await access.runtime.mediaAdmin.listReady() : [],
+  access.runtime.mediaPublicBaseUrl,
+);
 
 if (!declaration) {
   Astro.response.status = 404;
@@ -157,7 +163,12 @@ else if (Astro.request.method === 'POST') {
           )}
         </div>
 
-        <ContentFormFields fields={declaration.fields} values={fieldValues} errors={fieldErrors} />
+        <ContentFormFields
+          fields={declaration.fields}
+          values={fieldValues}
+          errors={fieldErrors}
+          pickerItems={pickerItems}
+        />
 
         <CoverPicker
           readyMedia={readyMedia}

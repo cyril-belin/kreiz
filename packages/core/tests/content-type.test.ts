@@ -92,7 +92,7 @@ describe('defineContentType — déclarations invalides (fail fast)', () => {
         label: 'Article',
         routeNamespace: 'articles',
         fields: {
-          body: { kind: 'richText', label: 'Corps' } as never,
+          body: { kind: 'pluginWidget', label: 'Corps' } as never,
         },
         template: 't.astro',
       }),

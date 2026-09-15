@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { query } from './db';
+import { bodyText } from './richtext';
 import {
   capturedHookRequests,
   resetHookCaptures,
@@ -35,7 +36,7 @@ async function createArticleDraft(
   values: { title: string; excerpt: string; body: string; author: string; slug?: string },
 ): Promise<void> {
   await page.goto('/admin/content/article/new');
-  await page.getByLabel('Titre').fill(values.title);
+  await page.getByRole('textbox', { name: 'Titre' }).fill(values.title);
   if (values.slug) await page.getByLabel('Slug').fill(values.slug);
   await page.getByLabel('Accroche').fill(values.excerpt);
   await page.getByLabel('Corps').fill(values.body);
@@ -83,7 +84,7 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
       published_at: string | null;
       published_slug: string | null;
       published_title: string | null;
-      published_data: { body?: string } | null;
+      published_data: { body?: unknown } | null;
       slug: string;
     }>(
       `select status, published_at::text, published_slug, published_title, published_data, slug
@@ -96,7 +97,8 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
       published_title: `Article E2E publication ${runId}`,
     });
     expect(rows[0]!.published_at).not.toBeNull();
-    expect(rows[0]!.published_data?.body).toBe('Corps version 1.');
+    // Le corps publié est un document canonique portant le texte (slice 6).
+    expect(bodyText(rows[0]!.published_data?.body)).toBe('Corps version 1.');
 
     // Audit content.published avec le vrai acteur.
     const audit = await query<{ action: string; metadata: Record<string, unknown> }>(
@@ -132,12 +134,13 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
 
     // La base sépare les deux projections : courant V2, public V1 —
     // preuve que le prochain build n'embarquerait pas le Save.
-    const rows = await query<{ data: { body: string }; published_data: { body: string } }>(
+    const rows = await query<{ data: { body: unknown }; published_data: { body: unknown } }>(
       'select data, published_data from kreiz_content_entries where id = $1',
       [id],
     );
-    expect(rows[0]!.data.body).toBe('Corps version 2 — non publié.');
-    expect(rows[0]!.published_data.body).toBe('Corps version 1.');
+    // Save != Publish sur le corps : courant = V2, public figé = V1 (slice 6).
+    expect(bodyText(rows[0]!.data.body)).toBe('Corps version 2 — non publié.');
+    expect(bodyText(rows[0]!.published_data.body)).toBe('Corps version 1.');
 
     // Le listing affiche l'indicateur de modifications non publiées (mission §29).
     await page.goto('/admin/content/article');
@@ -155,11 +158,11 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
     await page.goto(`/admin/content/article/${id}`);
     await page.getByRole('button', { name: 'Publier les modifications' }).click();
     await expect(page).toHaveURL(new RegExp(`\\?rebuild=ok&published=1$`));
-    const updated = await query<{ published_data: { body: string } }>(
+    const updated = await query<{ published_data: { body: unknown } }>(
       'select published_data from kreiz_content_entries where id = $1',
       [id],
     );
-    expect(updated[0]!.published_data.body).toBe('Corps version 2 — non publié.');
+    expect(bodyText(updated[0]!.published_data.body)).toBe('Corps version 2 — non publié.');
     expect(await hookReasons()).toContain('content.published');
   });
 
@@ -351,7 +354,7 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
 
     // La page d'édition reste accessible : la session n'a pas été touchée.
     await page.goto(`/admin/content/article/${id}`);
-    await expect(page.getByLabel('Titre')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Titre' })).toBeVisible();
     // Rien n'a été publié.
     const rows = await query<{ status: string }>(
       'select status from kreiz_content_entries where id = $1',

@@ -5,6 +5,27 @@ import type { MediaRepository } from '../../src/data/repositories/media';
 import type { ObjectStorage, StoragePutInput, StoredObjectHead } from '../../src/ports/storage';
 import type { BackgroundJobs } from '../../src/ports/jobs';
 import { MEDIA_STATUS_TRANSITIONS } from '../../src/domain/media/lifecycle';
+import { extractRichTextMediaIds, type KreizRichTextDocument } from '../../src/domain/content/rich-text/document';
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * `data` (ou `published_data`) est un enregistrement de champs — un média
+ * référencé vit dans un **champ** document, pas à la racine : extraction par
+ * valeur de champ, structurellement défensive (document malformé = pas de
+ * référence extraite, jamais d'exception dans un comptage).
+ */
+function dataReferencesMedia(data: unknown, mediaId: string): boolean {
+  if (!isObjectRecord(data)) return false;
+  return Object.values(data).some(
+    (fieldValue) =>
+      isObjectRecord(fieldValue) &&
+      Array.isArray((fieldValue as { content?: unknown }).content) &&
+      extractRichTextMediaIds(fieldValue as unknown as KreizRichTextDocument).includes(mediaId),
+  );
+}
 
 /**
  * Doubles de test du domaine média (mission §19/§50) — repositories,
@@ -141,6 +162,34 @@ export function createInMemoryMediaRepository(
       let count = 0;
       for (const entry of state.entries.values()) {
         if (entry.coverMediaId === mediaId || entry.publishedCoverMediaId === mediaId) count += 1;
+      }
+      return count;
+    },
+
+    // Miroir en mémoire du comptage JSONB réel (slice 6) : extraction
+    // structurelle par le domaine, contenus soft-deleted compris.
+    async countRichTextReferences(mediaId) {
+      let count = 0;
+      for (const entry of state.entries.values()) {
+        const referenced =
+          dataReferencesMedia(entry.data, mediaId) ||
+          dataReferencesMedia(entry.publishedData, mediaId);
+        if (referenced) count += 1;
+      }
+      return count;
+    },
+
+    async countContentReferences(mediaId) {
+      let count = 0;
+      for (const entry of state.entries.values()) {
+        const coverRef = entry.coverMediaId === mediaId || entry.publishedCoverMediaId === mediaId;
+        if (
+          coverRef ||
+          dataReferencesMedia(entry.data, mediaId) ||
+          dataReferencesMedia(entry.publishedData, mediaId)
+        ) {
+          count += 1;
+        }
       }
       return count;
     },

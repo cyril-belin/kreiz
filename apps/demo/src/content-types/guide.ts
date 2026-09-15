@@ -17,11 +17,10 @@ export const guideType = defineContentType({
       required: true,
       maxLength: 300,
     }),
-    body: fields.textarea({
+    body: fields.richText({
       label: 'Corps',
-      help: 'Texte intégral. Paragraphes séparés par des lignes vides.',
+      help: 'Texte intégral : titres, listes, citations, liens et images de la médiathèque.',
       required: true,
-      maxLength: 20_000,
     }),
     difficulty: fields.select({
       label: 'Difficulté',

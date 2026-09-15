@@ -131,6 +131,11 @@ export function createMediaAdminService(deps: MediaAdminServiceDeps) {
      * variantes). L'ordre DB → storage privilégie l'absence de référence
      * résiduelle : un objet orphelin est invisible et purgeable, un row
      * pointant vers du stockage supprimé ne l'est pas.
+     *
+     * Slice 6 : l'usage couvre aussi les références **rich text** (corps
+     * courant ou snapshot publié) — `countContentReferences` additionne
+     * couvertures et documents ; un média inséré dans un corps de texte est
+     * protégé exactement comme une couverture.
      */
     async deleteMedia(
       input: { mediaId: string; actorAdminId: string },
@@ -138,7 +143,7 @@ export function createMediaAdminService(deps: MediaAdminServiceDeps) {
       const found = await media.findById(input.mediaId);
       if (!found) throw new MediaNotFoundError(input.mediaId);
 
-      const references = await media.countCoverReferences(found.id);
+      const references = await media.countContentReferences(found.id);
       if (references > 0) {
         throw new MediaInUseError(found.id, references);
       }

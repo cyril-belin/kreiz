@@ -235,6 +235,38 @@ describeIntegration('chemin public build-time — published → build Astro → 
     await withTransientNetworkRetry(() =>
       entries.create(publishedRow({ slug: publishedSlug, publishedSlug, title, coverMediaId })),
     );
+    // 1ter. Article publié au **corps rich text** (slice 6 §37) — le snapshot
+    //       porte un document canonique (mediaId → pipeline slice 5 au rendu).
+    const richSlug = `build-rich-${runId}`;
+    const richDocument = {
+      version: 1,
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: `Section riche ${runId}` }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Paragraphe du corps riche.' }] },
+        {
+          type: 'bulletList',
+          content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Puce du corps' }] }] }],
+        },
+        { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Citation du corps' }] }] },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Lien externe', marks: [{ type: 'link', attrs: { href: 'https://exemple.fr/docs' } }] }],
+        },
+        { type: 'media', attrs: { mediaId: coverMediaId, caption: 'Légende du corps riche' } },
+      ],
+    };
+    await withTransientNetworkRetry(() =>
+      entries.create(
+        publishedRow({
+          slug: richSlug,
+          publishedSlug: richSlug,
+          title: `Article riche build ${runId}`,
+          data: { excerpt, body: richDocument, author },
+          publishedData: { excerpt, body: richDocument, author },
+        }),
+      ),
+    );
     // 2. Published au slug éditorial dérivé : la page publique reste à
     //    l'ancienne adresse (snapshots) — Save != Publish au build.
     await withTransientNetworkRetry(() =>
@@ -324,6 +356,50 @@ describeIntegration('chemin public build-time — published → build Astro → 
     // Aucune URL d'original privé, aucune URL signée expirante (mission §53).
     expect(html).not.toContain(`/media/${coverMediaId}/original`);
     expect(html).not.toContain('X-Amz-Signature');
+
+    // — 1ter. Corps rich text (slice 6 §37) : rendu sémantique complet dans
+    //         le HTML **statique** final — headings, listes, citation, lien
+    //         (target/rel politiques), média en figure/picture/figcaption.
+    const richPagePath = join(STATIC_ROOT, 'articles', richSlug, 'index.html');
+    expect(existsSync(richPagePath), `page riche ${richPagePath} attendue`).toBe(true);
+    const richHtml = readFileSync(richPagePath, 'utf8');
+    expect(richHtml).toContain(`<h2>Section riche ${runId}</h2>`);
+    expect(richHtml).toContain('<p>Paragraphe du corps riche.</p>');
+    expect(richHtml).toContain('<ul><li><p>Puce du corps</p></li></ul>');
+    expect(richHtml).toContain('<blockquote><p>Citation du corps</p></blockquote>');
+    expect(richHtml).toContain(
+      '<a href="https://exemple.fr/docs" target="_blank" rel="noopener noreferrer">Lien externe</a>',
+    );
+    expect(richHtml).toContain('<figure class="kz-richtext-figure" data-kreiz-media><picture>');
+    expect(richHtml).toContain(`<figcaption>Légende du corps riche</figcaption>`);
+    // Les sources reflètent exactement les variantes produites (pas
+    // d'upscale) : AVIF 400w, WebP 400w + 800w, fallback = WebP 800w.
+    expect(richHtml).toContain(
+      `<source type="image/avif" srcset="${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/400.avif 400w" />`,
+    );
+    expect(richHtml).toContain(
+      `<source type="image/webp" srcset="${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/400.webp 400w, ${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/800.webp 800w" />`,
+    );
+    expect(richHtml).toContain(
+      `<img src="${MEDIA_PUBLIC_BASE_URL}/media/${coverMediaId}/800.webp" alt="${coverAlt}"`,
+    );
+    expect(richHtml).toContain(`alt="${coverAlt}"`);
+    // Les attributs externes ne sont PAS stockés, uniquement rendus : le
+    // document JSONB ne contient ni target ni rel (vérifié côté stockage).
+    const richRow = await harness.raw(
+      sql`select published_data from kreiz_content_entries where slug = ${richSlug} and created_by = ${admin.id}`,
+    );
+    expect(JSON.stringify(richRow[0])).not.toContain('"target"');
+    expect(JSON.stringify(richRow[0])).not.toContain('"rel"');
+
+    // — 1quater. Garde de frontière de bundle (slice 6 §29) : la page
+    //            publique n'embarque **aucun** script (le template démo n'en
+    //            charge pas) — donc jamais le runtime Tiptap/ProseMirror qui
+    //            n'existe que dans le bundle admin.
+    expect(richHtml.toLowerCase()).not.toContain('tiptap');
+    expect(richHtml.toLowerCase()).not.toContain('prosemirror');
+    expect(richHtml).not.toContain('<script');
+    expect(html).not.toContain('<script');
 
     // — 2. Slug dérivé : page à l'adresse publique figée, PAS au slug courant ;
     //      le contenu rendu est celui du snapshot (titre public).

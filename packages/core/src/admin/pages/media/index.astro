@@ -99,7 +99,7 @@ const deleteResult = Astro.url.searchParams.get('delete');
         )}
         {deleteResult === 'in-use' && (
           <div class="kz-banner kz-banner--warning" role="alert">
-            Suppression refusée : ce média est utilisé comme couverture par au moins un contenu. Retirez-le du contenu concerné avant de le supprimer.
+            Suppression refusée : ce média est utilisé par au moins un contenu (couverture ou corps de texte, y compris la dernière version publiée). Retirez toutes ses références avant de le supprimer.
           </div>
         )}
         {deleteResult === 'missing' && (

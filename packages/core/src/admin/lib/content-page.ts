@@ -1,5 +1,7 @@
 import type { APIContext } from 'astro';
 import type { FieldDescriptor } from '../../domain/content/fields.js';
+import { coerceRichTextValue } from '../../domain/content/rich-text/document.js';
+import { emptyRichTextDocument } from '../../domain/content/rich-text/document.js';
 import type { AdminAccess } from '../../http/guards.js';
 import type { KreizContentRuntime } from '../../http/admin-runtime.js';
 import { getKreizContentRuntime } from '../../http/admin-runtime.js';
@@ -98,6 +100,22 @@ export function formValuesFromData(
       case 'date':
       case 'select': {
         values[name] = { kind: 'string', value: typeof raw === 'string' ? raw : '' };
+        break;
+      }
+      case 'richText': {
+        // Le champ voyage en JSON canonique dans l'`input` caché : document
+        // stocké sérialisé tel quel ; texte simple pré-slice 6 converti de
+        // façon contrôlée (conversion effective au premier Save). Une donnée
+        // illisible est signalée au domaine — jamais écrasée silencieusement.
+        if (raw === undefined || raw === null) {
+          values[name] = { kind: 'string', value: JSON.stringify(emptyRichTextDocument()) };
+          break;
+        }
+        try {
+          values[name] = { kind: 'string', value: JSON.stringify(coerceRichTextValue(raw)) };
+        } catch {
+          values[name] = { kind: 'string', value: '' };
+        }
         break;
       }
       case 'metric': {

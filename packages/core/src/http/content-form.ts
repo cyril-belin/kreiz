@@ -17,7 +17,17 @@ import type { ResolvedContentTypeDeclaration } from '../domain/content/registry.
  * - métrique = paire `<input name="champ:label">` / `<input name="champ:value">` ;
  * - liste de métriques = lignes fixes de paires ; les lignes entièrement
  *   vides sont ignorées, une paire incomplète est une erreur de champ.
+ *
+ * Rich text (slice 6) : le champ voyage en `<input type="hidden">` portant
+ * le JSON du document — rempli par le serveur (état stocké) et synchronisé
+ * par l'îlot Tiptap à la soumission. Sans JavaScript, la valeur serveur
+ * repart **inchangée** : le formulaire ne corrompt jamais un document
+ * existant. Le parseur ne fait que délimiter le JSON ; la validation du
+ * document (version, nodes/marks, liens, bornes) reste au schéma du domaine.
  */
+
+import { RichTextDocumentError, richTextDocumentErrorMessage } from '../domain/content/rich-text/errors.js';
+import { parseRichTextDocument } from '../domain/content/rich-text/document.js';
 
 /** Valeur brute d'un champ, pour re-rendre le formulaire tel que saisi. */
 export type FormFieldValue =
@@ -46,6 +56,8 @@ export type ParsedContentForm = {
 
 const REQUIRED_FIELD_ERROR = 'Ce champ est requis.';
 const INCOMPLETE_METRIC_ERROR = 'Chaque ligne doit avoir un libellé et une valeur.';
+const UNREADABLE_RICH_TEXT_ERROR =
+  'Document illisible — rechargez la page pour restaurer le contenu enregistré (rien n’a été modifié).';
 
 function stringEntry(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -74,6 +86,34 @@ export function parseContentForm(
           data[name] = value;
         } else if (descriptor.required) {
           errors[name] = REQUIRED_FIELD_ERROR;
+        }
+        break;
+      }
+
+      case 'richText': {
+        // JSON brut du document (pas de trim : le JSON peut finir par un
+        // saut de ligne légitime). Vide = champ vide ; le JSON est ensuite
+        // validé par le schéma du domaine (version, nodes, marks, liens,
+        // bornes) — le parseur ne décide jamais de la validité éditoriale.
+        const raw = formData.get(name);
+        const value = typeof raw === 'string' ? raw : '';
+        values[name] = { kind: 'string', value };
+        if (value.trim().length === 0) {
+          if (descriptor.required) {
+            errors[name] = REQUIRED_FIELD_ERROR;
+          }
+          break;
+        }
+        try {
+          data[name] = parseRichTextDocument(JSON.parse(value));
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            errors[name] = UNREADABLE_RICH_TEXT_ERROR;
+          } else if (error instanceof RichTextDocumentError) {
+            errors[name] = richTextDocumentErrorMessage(error);
+          } else {
+            throw error;
+          }
         }
         break;
       }

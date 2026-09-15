@@ -27,6 +27,7 @@ export type {
   FieldDescriptor,
   TextFieldDescriptor,
   TextareaFieldDescriptor,
+  RichTextFieldDescriptor,
   SelectFieldDescriptor,
   SelectChoice,
   UrlFieldDescriptor,
@@ -48,8 +49,8 @@ export {
 } from '../domain/content/slug.js';
 
 // Vue mutualisée preview/public
-export { resolveContentViewModel } from '../domain/content/view-model.js';
-export type { ContentView } from '../domain/content/view-model.js';
+export { resolveContentViewModel, richTextFieldNames, collectRichTextMediaIds } from '../domain/content/view-model.js';
+export type { ContentView, RichTextFieldView } from '../domain/content/view-model.js';
 
 // Lecteur de build pour les pages publiques du Project (prérendu)
 export { createContentReader } from './reader.js';

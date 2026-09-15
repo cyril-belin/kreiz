@@ -7,6 +7,7 @@ import {
   type FieldDescriptor,
   type FieldsData,
 } from './fields.js';
+import { isBlankRichTextDocument, richTextValueSchema } from './rich-text/document.js';
 
 /**
  * Dérivation du schéma Zod strict d'un type de contenu depuis ses
@@ -40,6 +41,20 @@ function fieldSchema(descriptor: FieldDescriptor): z.ZodType<unknown> {
       const schema = descriptor.required
         ? z.string().trim().min(1).max(maxLength)
         : z.string().trim().max(maxLength).optional();
+      return schema as z.ZodType<unknown>;
+    }
+    case 'richText': {
+      // Validation par le domaine (parse canonique, whitelist nodes/marks,
+      // liens, bornes) + compat contrôlée des textes simples pré-slice 6.
+      // Le champ requis porte sur le **contenu éditorial réel** : un document
+      // techniquement valide mais vide (paragraphes vides, seules règles
+      // horizontales) reste refusé.
+      const schema = descriptor.required
+        ? richTextValueSchema.refine(
+            (document) => !isBlankRichTextDocument(document),
+            { message: 'Ce champ est requis.' },
+          )
+        : richTextValueSchema;
       return schema as z.ZodType<unknown>;
     }
     case 'select': {
