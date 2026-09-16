@@ -12,10 +12,11 @@ import {
 
 /**
  * Test de migration **slice 5** (mission §47/§49) : la chaîne complète de
- * `apps/demo` est rejouée dans un schéma isolé de la base réelle —
- * `0000 → 0001 → 0002 → 0003` — et la sémantique du snapshot de couverture
- * est vérifiée sur chaque état : `published_cover_media_id` absent avant
- * `0003`, présent, nullable et FK RESTRICT après.
+ * `apps/demo` est rejouée dans un schéma isolé de la base réelle (tous les
+ * fichiers SQL présents, 0005 inclus — la garde `LAST` ci-dessous reste
+ * l'affaire de la migration la plus récente du moment) et la sémantique du
+ * snapshot de couverture est vérifiée : `published_cover_media_id` absent
+ * avant `0003`, présent, nullable et FK RESTRICT après.
  *
  * Le Core ne possède toujours aucune migration : les fichiers SQL lus ici
  * appartiennent à `apps/demo/drizzle`.
@@ -28,9 +29,9 @@ const migrationFiles = readdirSync(drizzleDir)
   .filter((name) => name.endsWith('.sql'))
   .sort();
 const LAST = migrationFiles.at(-1);
-if (LAST && !LAST.startsWith('0004')) {
+if (LAST && !LAST.startsWith('0005')) {
   throw new Error(
-    `@kreiz/core : la dernière migration attendue pour ce test est 0004 — trouvé « ${LAST} ». Mettre à jour media-migration.test.ts.`,
+    `@kreiz/core : la dernière migration attendue pour ce test est 0005 — trouvé « ${LAST} ». Mettre à jour media-migration.test.ts.`,
   );
 }
 

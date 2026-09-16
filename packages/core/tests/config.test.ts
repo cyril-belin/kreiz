@@ -18,9 +18,19 @@ function articleDefinition(): ContentTypeDefinition {
 }
 
 describe('kreizConfigSchema', () => {
-  it('accepte une configuration vide', () => {
-    expect(normalizeKreizConfig({})).toEqual({});
-    expect(normalizeKreizConfig(undefined)).toEqual({});
+  it('accepte une configuration vide — analytics résolue avec défauts privacy-safe', () => {
+    // La section analytics est toujours résolue (défauts appliqués) : la
+    // forme sérialisée vers le module virtuel est complète par construction.
+    expect(normalizeKreizConfig({})).toEqual({
+      analytics: {
+        enabled: true,
+        retentionDays: 90,
+        respectPrivacySignals: true,
+        excludedPaths: [],
+        internalDomains: [],
+      },
+    });
+    expect(normalizeKreizConfig(undefined)).toEqual(normalizeKreizConfig({}));
   });
 
   it('normalise les types de contenu déclarés par le Project', () => {

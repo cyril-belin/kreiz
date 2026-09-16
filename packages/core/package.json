@@ -38,6 +38,10 @@
       "types": "./dist/forms/index.d.ts",
       "default": "./dist/forms/index.js"
     },
+    "./analytics": {
+      "types": "./dist/analytics/index.d.ts",
+      "default": "./dist/analytics/index.js"
+    },
     "./virtual": {
       "types": "./dist/virtual.d.ts"
     },

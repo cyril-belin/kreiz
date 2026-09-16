@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { AstroIntegration } from 'astro';
-import { normalizeKreizConfig, type KreizConfig } from './config.js';
+import { normalizeKreizConfig, type KreizConfig, type KreizConfigInput } from './config.js';
 import { collectPublicRedirectsConfig } from './content/redirect-materialization.js';
 import type { AstroRedirectConfig } from './domain/content/redirect-engine.js';
 import { createKreizDatabase } from './data/connection.js';
@@ -26,8 +26,11 @@ import {
   ADMIN_MEDIA_RETRY_PATTERN,
   ADMIN_MEDIA_STATUS_PATTERN,
   ADMIN_MEDIA_UPLOAD_REQUEST_PATH,
+  ADMIN_ANALYTICS_PATH,
   ADMIN_PREVIEW_PATTERN,
   ADMIN_REBUILD_PATH,
+  PUBLIC_ANALYTICS_BEACON_PATTERN,
+  PUBLIC_ANALYTICS_EVENT_PATTERN,
   PUBLIC_FORM_SUBMIT_PATTERN,
 } from './http/admin-routes.js';
 import { validateDeclarationCrossConstraints } from './domain/content/registry.js';
@@ -65,8 +68,8 @@ import {
  * en production (registre de types, nav admin, preview), prouvant les
  * invariants que le spike portait seul (voir docs/slices/slice-3.md).
  */
-export function kreiz(input?: KreizConfig): AstroIntegration {
-  const config = normalizeKreizConfig(input ?? {});
+export function kreiz(input?: KreizConfigInput): AstroIntegration {
+  const config: KreizConfig = normalizeKreizConfig(input ?? {});
 
   // Fail fast, en Node pur (sans module virtuel ni composants) : chaque
   // type déclaré est bien formé, ses clés et namespaces sont uniques, et
@@ -263,6 +266,26 @@ export function kreiz(input?: KreizConfig): AstroIntegration {
           pattern: PUBLIC_FORM_SUBMIT_PATTERN,
           entrypoint: fileURLToPath(new URL('./forms/public-submit.js', import.meta.url)),
           prerender: false,
+        });
+
+        // Analytics (slice 8) — dashboard admin (SSR sous /admin, session) +
+        // endpoint public de collecte (POST JSON borné) + fichier beacon
+        // **prérendu** (statique au build : mesurer n'ajoute aucun runtime
+        // dynamique au site public).
+        injectRoute({
+          pattern: ADMIN_ANALYTICS_PATH,
+          entrypoint: fileURLToPath(new URL('./admin/pages/analytics.astro', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: PUBLIC_ANALYTICS_EVENT_PATTERN,
+          entrypoint: fileURLToPath(new URL('./analytics/collect.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: PUBLIC_ANALYTICS_BEACON_PATTERN,
+          entrypoint: fileURLToPath(new URL('./analytics/beacon.js', import.meta.url)),
+          prerender: true,
         });
       },
     },

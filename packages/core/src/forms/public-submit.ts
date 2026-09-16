@@ -13,6 +13,7 @@ import {
 } from '../http/public-form.js';
 import { isTrustedSameSiteMutation } from '../http/mutations.js';
 import { clientIpFromHeaders } from '../http/admin-login.js';
+import { analyticsPageFromReferer } from '../analytics/collect.js';
 
 /**
  * Endpoint public de soumission — `/api/forms/[key]` (cadrage §5 : les
@@ -81,6 +82,7 @@ export const POST: APIRoute = async (ctx) => {
     honeypotFilled: parsed.honeypotFilled,
     token: parsed.token,
     clientIp: clientIpFromHeaders(ctx.request.headers),
+    analyticsPage: analyticsPageFromReferer(ctx.request),
   });
 
   switch (outcome.kind) {

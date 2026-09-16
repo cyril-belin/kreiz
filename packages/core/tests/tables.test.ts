@@ -77,4 +77,26 @@ describe('defineCoreTables', () => {
       'kreiz_admin_users_email_key',
     );
   });
+
+  it('analytics : déduplication partielle, index de lecture/purge, bornes en base (slice 8)', () => {
+    const { analyticsEvents } = defineCoreTables();
+    const config = getTableConfig(analyticsEvents);
+
+    const indexNames = config.indexes.map((index) => index.config.name);
+    expect(indexNames).toContain('kreiz_analytics_events_name_created_at_idx');
+    expect(indexNames).toContain('kreiz_analytics_events_created_at_idx');
+
+    // Déduplication : index unique PARTIEL sur dedup_key (NULL = pas d'arbitre).
+    const dedup = config.indexes.find(
+      (index) => index.config.name === 'kreiz_analytics_events_dedup_key_unique',
+    );
+    expect(dedup?.config.unique).toBe(true);
+    expect(dedup?.config.where).toBeDefined();
+
+    const checkNames = config.checks.map((constraint) => constraint.name);
+    expect(checkNames).toContain('kreiz_analytics_events_event_name_check');
+    expect(checkNames).toContain('kreiz_analytics_events_referrer_kind_check');
+    expect(checkNames).toContain('kreiz_analytics_events_path_len_check');
+    expect(checkNames).toContain('kreiz_analytics_events_utm_len_check');
+  });
 });

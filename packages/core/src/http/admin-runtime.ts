@@ -1,6 +1,7 @@
 import { getContentRegistry } from '../content/runtime.js';
 import { getContactFormRegistry } from '../forms/runtime.js';
 import { createAdminAuditLogRepository } from '../data/repositories/admin-audit-log.js';
+import { createAnalyticsEventsRepository } from '../data/repositories/analytics-events.js';
 import { createContactRequestsRepository } from '../data/repositories/contact-requests.js';
 import { createContentEntriesRepository } from '../data/repositories/content-entries.js';
 import { createMediaRepository } from '../data/repositories/media.js';
@@ -8,6 +9,7 @@ import { createRedirectsRepository } from '../data/repositories/redirects.js';
 import { createRateLimitsRepository } from '../data/repositories/rate-limits.js';
 import { createScheduledBackgroundJobs, fireAndForgetScheduler, waitUntilScheduler } from '../adapters/jobs.js';
 import { createSharpImageTransformer } from '../adapters/image/sharp.js';
+import { createAnalyticsService, type AnalyticsService } from '../services/analytics.js';
 import { createContactService, type ContactService } from '../services/contact.js';
 import { createContentService, type ContentService } from '../services/content.js';
 import { createMediaAdminService, type MediaAdminService } from '../services/media-admin.js';
@@ -17,6 +19,7 @@ import { createMediaUploadService, type MediaUploadService } from '../services/m
 import { createPublicationService, type PublicationService } from '../services/publication.js';
 import type { BackgroundJobs } from '../ports/jobs.js';
 import { getKreizAdminRuntime, type KreizAdminRuntime } from './server-env.js';
+import { getAnalyticsConfig } from '../analytics/runtime.js';
 
 /**
  * Composition root des pages du moteur de contenu : runtime admin (base +
@@ -43,6 +46,8 @@ export interface KreizContentRuntime extends KreizAdminRuntime {
   recovery: MediaRecoveryService | null;
   /** Demandes de contact — soumission publique, boîte admin, relances. */
   contact: ContactService;
+  /** Analytics privacy-first (slice 8) — collecte beacon, conversions, dashboard. */
+  analytics: AnalyticsService;
 }
 
 let cached: { base: KreizAdminRuntime; runtime: KreizContentRuntime } | null = null;
@@ -59,6 +64,12 @@ export function getKreizContentRuntime(): KreizContentRuntime {
     const registry = getContentRegistry();
     const forms = getContactFormRegistry();
     const mediaPublicBaseUrl = base.mediaPublicBaseUrl;
+    const analytics = createAnalyticsService({
+      events: createAnalyticsEventsRepository(base.db),
+      rateLimits,
+      config: getAnalyticsConfig(),
+      secret: base.secret,
+    });
     const content = createContentService({
       entries,
       media,
@@ -84,6 +95,7 @@ export function getKreizContentRuntime(): KreizContentRuntime {
       mailFrom: base.mailFrom,
       secret: base.secret,
       forms: { findById: (formId) => forms.findByKey(formId) },
+      analytics,
     });
     const mediaServices = base.storage
       ? (() => {
@@ -120,6 +132,7 @@ export function getKreizContentRuntime(): KreizContentRuntime {
         mediaAdmin: mediaServices.mediaAdmin,
         recovery: mediaServices.recovery,
         contact,
+        analytics,
       },
     };
   }

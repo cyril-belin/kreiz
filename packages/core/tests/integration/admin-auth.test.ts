@@ -191,15 +191,19 @@ describeIntegration('auth admin — service complet sur Neon', () => {
     expect(fresh.csrfToken).toBe(login.csrfToken);
 
     // last_seen reculé au-delà du seuil (1 h) → le touch prolonge.
-    await harness.raw(
-      sql`update kreiz_admin_sessions set last_seen_at = now() - interval '2 hours' where id = ${fresh.session.id}`,
+    // La comparaison se fait contre l'horodatage **reculé en base** (retourné
+    // par l'UPDATE) et non contre une lecture mémoire antérieure : deux
+    // allers-retours Neon peuvent tomber dans la même milliseconde murale —
+    // comparaison déterministe (le touch doit avoir réécrit last_seen_at).
+    const retreated = await harness.raw(
+      sql`update kreiz_admin_sessions set last_seen_at = now() - interval '2 hours'
+          where id = ${fresh.session.id} returning last_seen_at`,
     );
+    const retreatedAt = new Date(retreated[0]!.last_seen_at as string);
     const touched = await auth.resolveSession(login.sessionToken);
     expect(touched.status).toBe('authenticated');
     if (touched.status !== 'authenticated') return;
-    expect(touched.session.lastSeenAt.getTime()).toBeGreaterThan(
-      fresh.session.lastSeenAt.getTime(),
-    );
+    expect(touched.session.lastSeenAt.getTime()).toBeGreaterThan(retreatedAt.getTime());
     expect(touched.session.expiresAt.getTime()).toBeGreaterThan(
       fresh.session.expiresAt.getTime() - 1000,
     );

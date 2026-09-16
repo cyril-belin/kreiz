@@ -1,5 +1,7 @@
 ---
 import '../../styles/global.css';
+import { analyticsBeaconScript } from '@kreiz/core/analytics';
+
 
 /**
  * Page de remerciement — chemin déclaré dans la déclaration du formulaire
@@ -27,5 +29,6 @@ import '../../styles/global.css';
         <a class="underline hover:text-neutral-200" href="/">← Retour à l'accueil</a>
       </p>
     </main>
-  </body>
+  <Fragment set:html={analyticsBeaconScript()} />
+</body>
 </html>

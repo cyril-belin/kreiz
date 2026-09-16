@@ -1,4 +1,5 @@
 ---
+import { analyticsBeaconScript } from '@kreiz/core/analytics';
 import { createContentReader } from '@kreiz/core/content';
 import { articleType } from '../../content-types/article.js';
 import ArticleContent from '../../templates/ArticleContent.astro';
@@ -33,3 +34,5 @@ const { view } = Astro.props;
 ---
 
 <ArticleContent view={view} />
+
+<Fragment set:html={analyticsBeaconScript()} />

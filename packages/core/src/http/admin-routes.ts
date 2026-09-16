@@ -79,6 +79,25 @@ export const ADMIN_FORM_STATUS_PATTERN = '/admin/forms/[id]/status';
 /** Relance de la notification email — mutation POST. */
 export const ADMIN_FORM_NOTIFY_PATTERN = '/admin/forms/[id]/notify';
 
+// ——— Analytics (slice 8) — page admin + routes publiques ———
+
+/** Dashboard analytics admin : agrégations 7/30/90 jours, aucun chart lourd. */
+export const ADMIN_ANALYTICS_PATH = '/admin/analytics';
+
+/**
+ * Endpoint public de collecte (beacon) — hors `/admin`, sans session admin,
+ * POST JSON strictement borné. Liste `PUBLIC_ROUTE_PATTERNS` (garde
+ * mécanique), jamais sous le préfixe.
+ */
+export const PUBLIC_ANALYTICS_EVENT_PATTERN = '/api/analytics/event';
+/**
+ * Fichier beacon — route **prérendue** (fichier statique au build, CDN) :
+ * mesurer le site public n'ajoute aucun runtime dynamique au chemin critique.
+ */
+export const PUBLIC_ANALYTICS_BEACON_PATTERN = '/api/analytics/beacon.js';
+/** Alias lisible du chemin du beacon pour les helpers publics. */
+export const PUBLIC_ANALYTICS_BEACON_PATH = PUBLIC_ANALYTICS_BEACON_PATTERN;
+
 // ——— Endpoint PUBLIC de soumission (slice 7) — hors /admin, sans session ———
 
 /**
@@ -115,10 +134,15 @@ export const ADMIN_ROUTE_PATTERNS = [
   ADMIN_FORM_DETAIL_PATTERN,
   ADMIN_FORM_STATUS_PATTERN,
   ADMIN_FORM_NOTIFY_PATTERN,
+  ADMIN_ANALYTICS_PATH,
 ] as const;
 
 /** Patterns des routes **publiques** injectées par l'intégration (jamais sous /admin). */
-export const PUBLIC_ROUTE_PATTERNS = [PUBLIC_FORM_SUBMIT_PATTERN] as const;
+export const PUBLIC_ROUTE_PATTERNS = [
+  PUBLIC_FORM_SUBMIT_PATTERN,
+  PUBLIC_ANALYTICS_EVENT_PATTERN,
+  PUBLIC_ANALYTICS_BEACON_PATTERN,
+] as const;
 
 // ——— Constructeurs d'URL admin (pages et formulaires) ———
 

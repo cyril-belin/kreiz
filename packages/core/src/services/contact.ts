@@ -56,12 +56,32 @@ export interface ContactServiceDeps {
   /** Secret de déploiement (HMAC d'idempotence et de pseudonymisation d'IP). */
   secret: string;
   /**
+   * Récepteur analytics (slice 8) — conversions serveur uniquement
+   * (`form_accepted` à l'acceptation, `form_notification_sent` à la
+   * livraison). Aucune donnée visiteur n'y entre ; `null` : aucune mesure.
+   */
+  analytics?: ContactAnalyticsSink | null;
+  /**
    * Résolveur des formulaires déclarés (registre runtime) — utilisé par le
    * balayage de rattrapage pour reconstruire l'enveloppe des demandes plus
    * anciennes que le processus. `null` hors runtime Vite (tests injectent
    * le formulaire directement).
    */
   forms?: { findById(formId: string): ContactFormDeclaration | null } | null;
+}
+
+/**
+ * Récepteur des conversions analytics — interface étroite (jamais le
+ * service entier) pour garder la dépendance contact → analytics en un seul
+ * point, sans cycle.
+ */
+export interface ContactAnalyticsSink {
+  recordConversion(input: {
+    name: 'form_accepted' | 'form_notification_sent';
+    formKey: string;
+    page: string | null;
+    now?: Date;
+  }): Promise<boolean>;
 }
 
 export type ContactSubmissionOutcome =
@@ -80,7 +100,7 @@ export type ContactNotificationOutcome =
   | { status: 'exhausted'; failure: NonNullable<KreizContactRequest['notificationFailure']> };
 
 export function createContactService(deps: ContactServiceDeps) {
-  const { requests, rateLimits, audit, mailer, mailFrom, secret } = deps;
+  const { requests, rateLimits, audit, mailer, mailFrom, secret, analytics } = deps;
 
   function ipHash(clientIp: string | null | undefined): string {
     return pseudonymizeIp(clientIp ?? 'unknown', secret);
@@ -114,6 +134,8 @@ export function createContactService(deps: ContactServiceDeps) {
     /** Jeton d'émission soumis. */
     token: string;
     clientIp: string | null;
+    /** Chemin referer same-origin normalisé — conversion analytics uniquement. */
+    analyticsPage?: string | null;
     now?: Date;
   }): Promise<ContactSubmissionOutcome> {
     const now = input.now ?? new Date();
@@ -186,6 +208,18 @@ export function createContactService(deps: ContactServiceDeps) {
       },
     });
 
+    // Conversion analytics (slice 8) — soumission **réellement acceptée**
+    // uniquement. Jamais le payload, jamais l'email : clé de formulaire,
+    // page referer (déjà normalisée) et horodatage seulement. Un échec de
+    // mesure est avalé par le récepteur : la mesure ne casse jamais le
+    // produit qu'elle observe.
+    await analytics?.recordConversion({
+      name: 'form_accepted',
+      formKey: input.form.key,
+      page: input.analyticsPage ?? null,
+      now,
+    });
+
     // 7. Notification — best effort, la demande existe déjà.
     const notification = notificationConfigured
       ? await attemptNotification({
@@ -225,6 +259,14 @@ export function createContactService(deps: ContactServiceDeps) {
     const result = await mailer.send(buildNotificationEmail(options.form, claimed));
     if (result.ok) {
       await requests.markNotified(claimed.id, { notifiedAt: now });
+      // Livraison de la notification = événement analytics optionnel
+      // (signal produit ; la traçabilité opérationnelle reste dans l'audit).
+      await analytics?.recordConversion({
+        name: 'form_notification_sent',
+        formKey: options.form.key,
+        page: null,
+        now,
+      });
       return { status: 'sent' };
     }
 

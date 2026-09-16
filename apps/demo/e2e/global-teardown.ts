@@ -75,6 +75,9 @@ const CLEANUP: Array<[string, unknown[]]> = [
   // demandes marquées par l'email e2e- du payload.
   [`delete from kreiz_admin_audit_log where entity_type = 'contact_request'`, []],
   [`delete from kreiz_contact_requests where payload->>'email' like 'e2e-%'`, []],
+  // Analytics (slice 8) : toute la table est produite par le run (aucun
+  // trafic réel sur la branche d'E2E) — aucune dépendance entrante.
+  ['delete from kreiz_analytics_events', []],
   ["delete from kreiz_admin_users where email like 'e2e-%'", []],
   ['delete from kreiz_rate_limits', []],
 ];

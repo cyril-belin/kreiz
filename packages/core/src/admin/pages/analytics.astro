@@ -1,0 +1,249 @@
+---
+export const prerender = false;
+
+import AdminShell from '../components/AdminShell.astro';
+import MessagePanel from '../components/MessagePanel.astro';
+import { ADMIN_ANALYTICS_PATH, ADMIN_LOGIN_PATH } from '../../http/admin-routes.js';
+import { authenticateContentPage } from '../lib/content-page.js';
+import {
+  ANALYTICS_DASHBOARD_PERIODS,
+  isDashboardPeriod,
+} from '../../domain/analytics/policy.js';
+import type { AnalyticsDashboard } from '../../services/analytics.js';
+
+/**
+ * Dashboard analytics (slice 8) — agrégations SQL simples (aucun événement
+ * chargé en mémoire), période 7/30/90 jours, séries journalières en CSS pur
+ * (aucune librairie de charts). Fuseau : **UTC** au niveau Core (buckets
+ * `date_trunc('day')`), étiquettes de dates affichées telles quelles —
+ * politique documentée dans docs/slices/slice-8.md.
+ *
+ * Effet de bord assumé : la consultation purge **opportunistement** les
+ * événements plus vieux que la rétention configurée — le Core doit pouvoir
+ * purger proprement sans scheduler obligatoire.
+ */
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect(ADMIN_LOGIN_PATH, 302);
+}
+
+const requested = Number(Astro.url.searchParams.get('periode'));
+const period = isDashboardPeriod(requested) ? requested : 30;
+
+const retention = await access.runtime.analytics.runRetention();
+const config = access.runtime.analytics.config;
+
+let dashboard: AnalyticsDashboard | null = null;
+let dashboardError: string | null = null;
+if (!config.enabled) {
+  dashboardError = 'Analytics désactivés';
+} else {
+  try {
+    dashboard = await access.runtime.analytics.dashboard({ days: period });
+  } catch {
+    dashboardError = 'Agrégations indisponibles';
+  }
+}
+
+const numberFormatter = new Intl.NumberFormat('fr-FR');
+
+function maxDailyPageviews(data: AnalyticsDashboard): number {
+  return Math.max(1, ...data.daily.map((entry) => entry.pageviews));
+}
+
+function barHeight(value: number, max: number): string {
+  return `${Math.max(2, Math.round((value / max) * 100))}%`;
+}
+---
+
+<AdminShell
+  title="Analytics"
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  <div class="kz-page-actions">
+    {
+      ANALYTICS_DASHBOARD_PERIODS.map((days) => (
+        <a
+          class:list={['kz-button', period === days ? '' : 'kz-button--ghost']}
+          href={`${ADMIN_ANALYTICS_PATH}?periode=${days}`}
+        >
+          {days} jours
+        </a>
+      ))
+    }
+  </div>
+
+  {
+    dashboardError && (
+      <MessagePanel
+        tone="info"
+        title={dashboardError}
+        description={
+          config.enabled
+            ? 'Vérifiez la connexion à la base puis rechargez la page.'
+            : 'La collecte est désactivée (`analytics.enabled: false` dans la configuration du projet) : aucun événement n’est mesuré ni stocké.'
+        }
+      />
+    )
+  }
+
+  {
+    dashboard && (
+      <>
+        <section class="kz-panel" aria-labelledby="kz-analytics-totals">
+          <h2 class="kz-panel__title" id="kz-analytics-totals">
+            Vue d'ensemble — {dashboard.periodDays} derniers jours (UTC)
+          </h2>
+          <div class="kz-stats">
+            <div class="kz-stat">
+              <p class="kz-stat__value" data-testid="analytics-pageviews">
+                {numberFormatter.format(dashboard.totals.pageviews)}
+              </p>
+              <p class="kz-stat__label">Pages vues</p>
+            </div>
+            <div class="kz-stat">
+              <p class="kz-stat__value" data-testid="analytics-sessions">
+                {numberFormatter.format(dashboard.totals.sessions)}
+              </p>
+              <p class="kz-stat__label">Sessions approximatives</p>
+            </div>
+            <div class="kz-stat">
+              <p class="kz-stat__value" data-testid="analytics-conversions">
+                {numberFormatter.format(dashboard.totals.conversions)}
+              </p>
+              <p class="kz-stat__label">Formulaires acceptés</p>
+            </div>
+            <div class="kz-stat">
+              <p class="kz-stat__value">{numberFormatter.format(dashboard.totals.ctaClicks)}</p>
+              <p class="kz-stat__label">Clics CTA</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="kz-panel" aria-labelledby="kz-analytics-daily">
+          <h2 class="kz-panel__title" id="kz-analytics-daily">Pages vues par jour (UTC)</h2>
+          {dashboard.daily.length === 0 ? (
+            <p class="kz-panel__text">Aucune page vue sur la période.</p>
+          ) : (
+            <div class="kz-bars" role="img" aria-label="Pages vues par jour">
+              {dashboard.daily.map((entry) => (
+                <div
+                  class="kz-bars__bar"
+                  style={`height: ${barHeight(entry.pageviews, maxDailyPageviews(dashboard))}`}
+                  title={`${entry.day} — ${entry.pageviews} page${entry.pageviews > 1 ? 's' : ''} vue${entry.pageviews > 1 ? 's' : ''}`}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div class="kz-analytics-grid">
+          <section class="kz-panel" aria-labelledby="kz-analytics-pages">
+            <h2 class="kz-panel__title" id="kz-analytics-pages">Top pages</h2>
+            {dashboard.topPages.length === 0 ? (
+              <p class="kz-panel__text">Aucune donnée.</p>
+            ) : (
+              <table class="kz-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Chemin</th>
+                    <th scope="col">Vues</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.topPages.map((row) => (
+                    <tr>
+                      <td data-label="Chemin">{row.path}</td>
+                      <td data-label="Vues">{numberFormatter.format(row.views)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section class="kz-panel" aria-labelledby="kz-analytics-referrers">
+            <h2 class="kz-panel__title" id="kz-analytics-referrers">Top sources externes</h2>
+            {dashboard.topReferrers.length === 0 ? (
+              <p class="kz-panel__text">Aucune source externe (trafic direct uniquement).</p>
+            ) : (
+              <table class="kz-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Domaine</th>
+                    <th scope="col">Vues</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.topReferrers.map((row) => (
+                    <tr>
+                      <td data-label="Domaine">{row.domain}</td>
+                      <td data-label="Vues">{numberFormatter.format(row.views)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section class="kz-panel" aria-labelledby="kz-analytics-campaigns">
+            <h2 class="kz-panel__title" id="kz-analytics-campaigns">Top campagnes (UTM)</h2>
+            {dashboard.topCampaigns.length === 0 ? (
+              <p class="kz-panel__text">Aucune campagne sur la période.</p>
+            ) : (
+              <table class="kz-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Campagne</th>
+                    <th scope="col">Vues</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.topCampaigns.map((row) => (
+                    <tr>
+                      <td data-label="Campagne">{row.label}</td>
+                      <td data-label="Vues">{numberFormatter.format(row.views)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section class="kz-panel" aria-labelledby="kz-analytics-forms">
+            <h2 class="kz-panel__title" id="kz-analytics-forms">Conversions formulaire</h2>
+            {dashboard.formConversions.length === 0 ? (
+              <p class="kz-panel__text">Aucune conversion sur la période.</p>
+            ) : (
+              <table class="kz-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Formulaire</th>
+                    <th scope="col">Acceptées</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.formConversions.map((row) => (
+                    <tr>
+                      <td data-label="Formulaire">{row.form}</td>
+                      <td data-label="Acceptées">{numberFormatter.format(row.accepted)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+
+        <p class="kz-analytics-meta">
+          Données pseudonymes : aucune IP, aucun User-Agent brut, aucune query string, aucune
+          donnée de formulaire. Rétention configurée : {config.retentionDays} jours
+          {retention && retention.deleted > 0 ? ` — ${retention.deleted} événement(s) purgé(s) à l'ouverture.` : '.'}
+        </p>
+      </>
+    )
+  }
+</AdminShell>

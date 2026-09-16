@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import { analyticsBeaconScript } from '@kreiz/core/analytics';
+
 ---
 
 <html lang="fr">
@@ -46,5 +48,6 @@ import '../styles/global.css';
         </p>
       </section>
     </main>
-  </body>
+  <Fragment set:html={analyticsBeaconScript()} />
+</body>
 </html>

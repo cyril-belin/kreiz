@@ -11,12 +11,16 @@ import {
 import { createContentEntriesRepository } from '../../src/data/repositories/content-entries';
 import { createMediaRepository } from '../../src/data/repositories/media';
 import { createRedirectsRepository } from '../../src/data/repositories/redirects';
+import { analyticsBeaconScript } from '../../src/analytics/beacon-source';
 import {
   describeIntegration,
   setupIntegration,
   withTransientNetworkRetry,
   type IntegrationHarness,
 } from './helpers';
+
+/** L'unique `<script>` toléré sur une page publique (beacon auto-hébergé). */
+const BEACON_TAG = analyticsBeaconScript();
 
 /**
  * Preuve du **chemin public build-time** (revue slice 3, étendue slice 4 —
@@ -392,14 +396,17 @@ describeIntegration('chemin public build-time — published → build Astro → 
     expect(JSON.stringify(richRow[0])).not.toContain('"target"');
     expect(JSON.stringify(richRow[0])).not.toContain('"rel"');
 
-    // — 1quater. Garde de frontière de bundle (slice 6 §29) : la page
-    //            publique n'embarque **aucun** script (le template démo n'en
-    //            charge pas) — donc jamais le runtime Tiptap/ProseMirror qui
-    //            n'existe que dans le bundle admin.
+    // — 1quater. Garde de frontière de bundle (slice 6 §29, ajustée slice 8) :
+    //            la page publique n'embarque **aucun** script de bundle (le
+    //            runtime Tiptap/ProseMirror n'existe que dans le bundle
+    //            admin) — le seul `<script>` autorisé est le beacon analytics
+    //            du Core : un tag externe auto-hébergé (`defer`), aucune
+    //            logique inline dans la page.
     expect(richHtml.toLowerCase()).not.toContain('tiptap');
     expect(richHtml.toLowerCase()).not.toContain('prosemirror');
-    expect(richHtml).not.toContain('<script');
-    expect(html).not.toContain('<script');
+    expect(richHtml.replace(BEACON_TAG, '')).not.toContain('<script');
+    expect(html.replace(BEACON_TAG, '')).not.toContain('<script');
+    expect(richHtml).toContain(BEACON_TAG);
 
     // — 2. Slug dérivé : page à l'adresse publique figée, PAS au slug courant ;
     //      le contenu rendu est celui du snapshot (titre public).

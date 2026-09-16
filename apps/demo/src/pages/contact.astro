@@ -2,6 +2,8 @@
 import '../styles/global.css';
 import { renderContactFormHtml, issueFormToken } from '@kreiz/core/forms';
 import { contactForm } from '../forms/contact.js';
+import { analyticsBeaconScript } from '@kreiz/core/analytics';
+
 
 /**
  * Page publique du formulaire de contact — **statique** : le HTML du
@@ -38,5 +40,6 @@ const formHtml = renderContactFormHtml({ form: contactForm, token });
         <a class="underline hover:text-neutral-200" href="/">← Retour à l'accueil</a>
       </p>
     </main>
-  </body>
+  <Fragment set:html={analyticsBeaconScript()} />
+</body>
 </html>

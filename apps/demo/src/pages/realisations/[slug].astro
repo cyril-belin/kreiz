@@ -1,4 +1,5 @@
 ---
+import { analyticsBeaconScript } from '@kreiz/core/analytics';
 import { createContentReader } from '@kreiz/core/content';
 import { caseStudyType } from '../../content-types/case-study.js';
 import CaseStudyContent from '../../templates/CaseStudyContent.astro';
@@ -25,3 +26,5 @@ const { view } = Astro.props;
 ---
 
 <CaseStudyContent view={view} />
+
+<Fragment set:html={analyticsBeaconScript()} />

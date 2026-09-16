@@ -36,6 +36,13 @@
       "when": 1789541082803,
       "tag": "0004_parallel_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789567766435,
+      "tag": "0005_soft_phantom_reporter",
+      "breakpoints": true
     }
   ]
 }

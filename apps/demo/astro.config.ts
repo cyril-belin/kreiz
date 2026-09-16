@@ -36,6 +36,13 @@ export default defineConfig({
         types: [articleType, guideType, caseStudyType],
       },
       forms: [contactForm],
+      // Analytics privacy-first (slice 8) — défauts privacy-safe (détails
+      // dans docs/slices/slice-8.md) : ici explicite pour la démonstration.
+      analytics: {
+        enabled: true,
+        retentionDays: 90,
+        respectPrivacySignals: true,
+      },
     }),
   ],
   vite: {

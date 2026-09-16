@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest';
 import * as adminRoutes from '../src/http/admin-routes';
 import {
   ADMIN_HOME_PATH,
+  ADMIN_ANALYTICS_PATH,
   ADMIN_ROUTE_PATTERNS,
   ADMIN_ROUTE_PREFIX,
+  PUBLIC_ANALYTICS_BEACON_PATTERN,
+  PUBLIC_ANALYTICS_EVENT_PATTERN,
   PUBLIC_FORM_SUBMIT_PATTERN,
   PUBLIC_ROUTE_PATTERNS,
 } from '../src/http/admin-routes';
@@ -31,9 +34,10 @@ import {
  *
  * Depuis le slice 3, **aucune route ADMIN injectée n'est publique** : la
  * route spike `/api/kreiz/spike` (slice 0) a été supprimée — le test
- * l'interdit explicitement. Le slice 7 ajoute l'unique route **publique**
- * injectée (`/api/forms/[key]`, soumission des formulaires) : listée dans
- * `PUBLIC_ROUTE_PATTERNS`, gardée hors du préfixe, sans session admin.
+ * l'interdit explicitement. Les routes **publiques** injectées (soumission
+ * des formulaires slice 7, collecte et beacon analytics slice 8) sont
+ * listées dans `PUBLIC_ROUTE_PATTERNS`, gardées hors du préfixe, sans
+ * session admin.
  */
 
 describe('invariant namespace admin — routes authentifiées sous /admin/*', () => {
@@ -87,9 +91,8 @@ describe('invariant namespace admin — routes authentifiées sous /admin/*', ()
   });
 
   it('la route publique des formulaires (slice 7) est hors /admin et explicitement gardée', () => {
-    // Le endpoint de soumission est la seule route publique injectée : il
-    // ne doit JAMAIS vivre sous le préfixe admin (invariant du cookie
-    // Path=/admin) et il est listé dans PUBLIC_ROUTE_PATTERNS pour rester
+    // Le endpoint de soumission est hors du préfixe admin (invariant du
+    // cookie Path=/admin) et listé dans PUBLIC_ROUTE_PATTERNS pour rester
     // sous garde mécanique.
     expect(PUBLIC_ROUTE_PATTERNS).toContain(PUBLIC_FORM_SUBMIT_PATTERN);
     expect(PUBLIC_FORM_SUBMIT_PATTERN.startsWith(`${ADMIN_ROUTE_PREFIX}/`)).toBe(false);
@@ -97,6 +100,19 @@ describe('invariant namespace admin — routes authentifiées sous /admin/*', ()
     for (const value of PUBLIC_ROUTE_PATTERNS) {
       expect(value, `route publique sous /admin : ${value}`).not.toMatch(/^\/admin(\/|$)/);
     }
+  });
+
+  it('les routes publiques analytics (slice 8) sont hors /admin et explicitement gardées', () => {
+    // Collecte (POST JSON borné) et beacon (fichier prérendu) : routes
+    // publiques sous /api, listées dans PUBLIC_ROUTE_PATTERNS, sans session
+    // admin — même invariant que la soumission de formulaire.
+    expect(PUBLIC_ROUTE_PATTERNS).toContain(PUBLIC_ANALYTICS_EVENT_PATTERN);
+    expect(PUBLIC_ROUTE_PATTERNS).toContain(PUBLIC_ANALYTICS_BEACON_PATTERN);
+    expect(PUBLIC_ANALYTICS_EVENT_PATTERN).toMatch(/^\/api\//);
+    expect(PUBLIC_ANALYTICS_BEACON_PATTERN).toMatch(/^\/api\//);
+    // La page admin analytics, elle, vit sous le préfixe (session requise).
+    expect(ADMIN_ANALYTICS_PATH).toMatch(/^\/admin(\/|$)/);
+    expect(ADMIN_ROUTE_PATTERNS).toContain(ADMIN_ANALYTICS_PATH);
   });
 
   it('la route spike du slice 0 est supprimée — plus aucune route injectée hors /admin', () => {
