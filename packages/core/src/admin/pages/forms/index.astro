@@ -1,0 +1,124 @@
+---
+export const prerender = false;
+
+import type { KreizContactRequest } from '../../../data/tables/contact-requests.js';
+import AdminShell from '../../components/AdminShell.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import { ADMIN_FORMS_PATH, adminFormDetailPath } from '../../../http/admin-routes.js';
+import { authenticateContentPage } from '../../lib/content-page.js';
+import { getContactFormRegistry } from '../../../forms/runtime.js';
+
+/**
+ * Boîte de contact (cadrage §13) — liste des demandes, plus récentes
+ * d'abord, bornée (200). Le filtre « non traitées » est un lien (pas de
+ * JavaScript). Le payload ne s'affiche jamais ici : chaque ligne pointe le
+ * détail, seul rendu des données visiteur.
+ */
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect('/admin/login', 302);
+}
+
+const statusFilter = Astro.url.searchParams.get('status') === 'new' ? 'new' : undefined;
+const requests = await access.runtime.contact.listRequests({
+  limit: 200,
+  ...(statusFilter ? { status: statusFilter } : {}),
+});
+const newCount = await access.runtime.contact.countNew();
+
+const formLabels = new Map<string, string>();
+for (const declaration of getContactFormRegistry().list()) {
+  formLabels.set(declaration.key, declaration.label);
+}
+
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+
+function previewValue(row: KreizContactRequest): string {
+  const firstString = Object.values(row.payload).find((value): value is string => typeof value === 'string');
+  return firstString ? firstString.slice(0, 80) : '';
+}
+
+const notificationLabels: Record<KreizContactRequest['notificationStatus'], string> = {
+  not_configured: 'Non configurée',
+  pending: 'En attente',
+  sent: 'Envoyée',
+  failed: 'Échec',
+};
+---
+
+<AdminShell
+  title="Boîte de contact"
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  <div class="kz-page-actions">
+    <a class:list={['kz-button', statusFilter ? 'kz-button--ghost' : '']} href={ADMIN_FORMS_PATH}>Toutes</a>
+    <a class:list={['kz-button', statusFilter === 'new' ? '' : 'kz-button--ghost']} href={`${ADMIN_FORMS_PATH}?status=new`}>
+      Non traitées{newCount > 0 ? ` (${newCount})` : ''}
+    </a>
+  </div>
+
+  {
+    requests.length === 0 ? (
+      <MessagePanel
+        tone="info"
+        title={statusFilter === 'new' ? 'Aucune demande non traitée' : 'Aucune demande'}
+        description="Les soumissions des formulaires publics du projet apparaissent ici."
+      />
+    ) : (
+      <div class="kz-table-wrapper">
+        <table class="kz-table">
+          <thead>
+            <tr>
+              <th scope="col">Formulaire</th>
+              <th scope="col">Aperçu</th>
+              <th scope="col">État</th>
+              <th scope="col">Notification</th>
+              <th scope="col">Reçue le</th>
+              <th scope="col">
+                <span class="kz-visually-hidden">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {requests.map((row) => (
+              <tr>
+                <td data-label="Formulaire">{formLabels.get(row.formId) ?? row.formId}</td>
+                <td data-label="Aperçu">
+                  <a class="kz-table__link" href={adminFormDetailPath(row.id)}>
+                    {previewValue(row)}
+                  </a>
+                </td>
+                <td data-label="État">
+                  <span class:list={['kz-badge', row.status === 'new' ? 'kz-badge--draft' : 'kz-badge--published']}>
+                    {row.status === 'new' ? 'Nouvelle' : 'Traitée'}
+                  </span>
+                </td>
+                <td data-label="Notification">
+                  <span
+                    class:list={[
+                      'kz-badge',
+                      row.notificationStatus === 'sent'
+                        ? 'kz-badge--published'
+                        : row.notificationStatus === 'failed'
+                          ? 'kz-badge--changed'
+                          : 'kz-badge--draft',
+                    ]}
+                  >
+                    {notificationLabels[row.notificationStatus]}
+                  </span>
+                </td>
+                <td data-label="Reçue le">{dateFormatter.format(row.createdAt)}</td>
+                <td data-label="Actions">
+                  <a class="kz-row-action" href={adminFormDetailPath(row.id)}>Consulter</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</AdminShell>

@@ -6,6 +6,8 @@ import {
   ADMIN_HOME_PATH,
   ADMIN_ROUTE_PATTERNS,
   ADMIN_ROUTE_PREFIX,
+  PUBLIC_FORM_SUBMIT_PATTERN,
+  PUBLIC_ROUTE_PATTERNS,
 } from '../src/http/admin-routes';
 import {
   adminSessionCookieOptions,
@@ -27,9 +29,11 @@ import {
  *   accidentellement le cookie à `Path=/` ;
  * - le chemin du cookie s'écarte du préfixe.
  *
- * Depuis le slice 3, **aucune route injectée n'est publique** : la route
- * spike `/api/kreiz/spike` (slice 0) a été supprimée — le test l'interdit
- * explicitement.
+ * Depuis le slice 3, **aucune route ADMIN injectée n'est publique** : la
+ * route spike `/api/kreiz/spike` (slice 0) a été supprimée — le test
+ * l'interdit explicitement. Le slice 7 ajoute l'unique route **publique**
+ * injectée (`/api/forms/[key]`, soumission des formulaires) : listée dans
+ * `PUBLIC_ROUTE_PATTERNS`, gardée hors du préfixe, sans session admin.
  */
 
 describe('invariant namespace admin — routes authentifiées sous /admin/*', () => {
@@ -57,23 +61,41 @@ describe('invariant namespace admin — routes authentifiées sous /admin/*', ()
     expect(ADMIN_HOME_PATH).toBe(ADMIN_ROUTE_PREFIX);
   });
 
-  it('chaque pattern injecté par l’intégration est une constante du namespace admin', () => {
-    const patterns = [...integrationSource.matchAll(/pattern:\s*([A-Za-z_][A-Za-z0-9_]*|'[^']+')/g)].map(
-      (match) => match[1]!,
+  it('chaque pattern admin injecté par l’intégration est une constante du namespace admin', () => {
+    const identifiers = [
+      ...integrationSource.matchAll(/pattern:\s*([A-Za-z_][A-Za-z0-9_]*|'[^']+')/g),
+    ].map((match) => match[1]!);
+    // Toute route injectée (admin + publique) passe par une constante
+    // déclarée dans admin-routes.ts — jamais de littéral ni de constante
+    // locale.
+    expect(identifiers.length).toBe(
+      ADMIN_ROUTE_PATTERNS.length + PUBLIC_ROUTE_PATTERNS.length,
     );
-    expect(patterns.length).toBe(ADMIN_ROUTE_PATTERNS.length);
-    for (const pattern of patterns) {
-      // Toute route injectée passe par une constante déclarée dans
-      // admin-routes.ts — jamais de littéral ni de constante locale.
-      expect(adminRoutes, `route injectée hors admin-routes.ts : ${pattern}`).toHaveProperty(
-        pattern,
+    const allPatterns = [...ADMIN_ROUTE_PATTERNS, ...PUBLIC_ROUTE_PATTERNS];
+    for (const identifier of identifiers) {
+      expect(adminRoutes, `route injectée hors admin-routes.ts : ${identifier}`).toHaveProperty(
+        identifier,
       );
-      const value = (adminRoutes as Record<string, unknown>)[pattern];
-      expect(typeof value, `constante inattendue : ${pattern}`).toBe('string');
-      expect(
-        value as string,
-        `route injectée hors namespace admin : ${pattern}`,
-      ).toMatch(/^\/admin(\/|$)/);
+      const value = (adminRoutes as Record<string, unknown>)[identifier];
+      expect(typeof value, `constante inattendue : ${identifier}`).toBe('string');
+      // La valeur injectée est exactement un pattern gardé de la liste.
+      expect(allPatterns, `pattern non gardé : ${identifier}`).toContain(value);
+    }
+    for (const value of ADMIN_ROUTE_PATTERNS) {
+      expect(value, `route admin hors namespace : ${value}`).toMatch(/^\/admin(\/|$)/);
+    }
+  });
+
+  it('la route publique des formulaires (slice 7) est hors /admin et explicitement gardée', () => {
+    // Le endpoint de soumission est la seule route publique injectée : il
+    // ne doit JAMAIS vivre sous le préfixe admin (invariant du cookie
+    // Path=/admin) et il est listé dans PUBLIC_ROUTE_PATTERNS pour rester
+    // sous garde mécanique.
+    expect(PUBLIC_ROUTE_PATTERNS).toContain(PUBLIC_FORM_SUBMIT_PATTERN);
+    expect(PUBLIC_FORM_SUBMIT_PATTERN.startsWith(`${ADMIN_ROUTE_PREFIX}/`)).toBe(false);
+    expect(PUBLIC_FORM_SUBMIT_PATTERN).toMatch(/^\/api\//);
+    for (const value of PUBLIC_ROUTE_PATTERNS) {
+      expect(value, `route publique sous /admin : ${value}`).not.toMatch(/^\/admin(\/|$)/);
     }
   });
 

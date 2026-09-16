@@ -3,11 +3,13 @@ import tailwindcss from '@tailwindcss/vite';
 import { kreiz } from '@kreiz/core';
 import { defineConfig } from 'astro/config';
 import { articleType, guideType, caseStudyType } from './src/content-types/index.js';
+import { contactForm } from './src/forms/contact.js';
 
 // apps/demo est un consommateur EXTERNE de @kreiz/core : seule l'API publique
 // du package est utilisée. L'intégration injecte les routes du Core (login,
-// shell, CRUD contenu, preview — toutes SSR sous /admin) et reçoit ici les
-// types de contenu déclarés par le projet (mission §3) avec leurs templates.
+// shell, CRUD contenu, preview, boîte de contact, endpoint public des
+// formulaires — toutes SSR) et reçoit ici les types de contenu et les
+// formulaires déclarés par le projet (mission §3, cadrage §13).
 export default defineConfig({
   output: 'static',
   adapter: vercel(),
@@ -33,6 +35,7 @@ export default defineConfig({
       content: {
         types: [articleType, guideType, caseStudyType],
       },
+      forms: [contactForm],
     }),
   ],
   vite: {

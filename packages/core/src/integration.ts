@@ -12,6 +12,10 @@ import {
   ADMIN_CONTENT_PUBLISH_PATTERN,
   ADMIN_CONTENT_TYPE_PATTERN,
   ADMIN_CONTENT_UNPUBLISH_PATTERN,
+  ADMIN_FORM_DETAIL_PATTERN,
+  ADMIN_FORM_NOTIFY_PATTERN,
+  ADMIN_FORM_STATUS_PATTERN,
+  ADMIN_FORMS_PATH,
   ADMIN_HOME_PATH,
   ADMIN_LOGIN_PATH,
   ADMIN_LOGOUT_PATH,
@@ -24,6 +28,7 @@ import {
   ADMIN_MEDIA_UPLOAD_REQUEST_PATH,
   ADMIN_PREVIEW_PATTERN,
   ADMIN_REBUILD_PATH,
+  PUBLIC_FORM_SUBMIT_PATTERN,
 } from './http/admin-routes.js';
 import { validateDeclarationCrossConstraints } from './domain/content/registry.js';
 import {
@@ -42,8 +47,11 @@ import {
  *
  * Toutes les routes injectées sont SSR (`prerender: false`) et vivent sous
  * `/admin/*` (invariant du cookie, garde mécanique dans
- * `tests/admin-routes.test.ts`). Le projet n'écrit aucune plomberie :
- * il déclare ses types de contenu (mission §3) et ses templates (§21).
+ * `tests/admin-routes.test.ts`) — à l'exception unique de l'endpoint
+ * public de soumission des formulaires (`/api/forms/[key]`, slice 7) :
+ * liste séparée `PUBLIC_ROUTE_PATTERNS`, hors `/admin`, jamais de session
+ * admin. Le projet n'écrit aucune plomberie : il déclare ses types de
+ * contenu (mission §3), ses formulaires (cadrage §13) et ses templates (§21).
  *
  * Redirections de publication (slice 4) : quand `KREIZ_DATABASE_URL` est
  * présent au build, les redirections 301 issues de `kreiz_redirects` (cibles
@@ -223,6 +231,37 @@ export function kreiz(input?: KreizConfig): AstroIntegration {
         injectRoute({
           pattern: ADMIN_MEDIA_DELETE_PATTERN,
           entrypoint: fileURLToPath(new URL('./admin/routes/media-delete.js', import.meta.url)),
+          prerender: false,
+        });
+
+        // Formulaires publics (slice 7) — boîte de contact admin + endpoint
+        // public de soumission. La boîte vit sous /admin (session, CSRF) ;
+        // l'endpoint est la **seule route publique** injectée par le Core
+        // (hors /admin, sans session — invariant cookie, garde mécanique
+        // dans tests/admin-routes.test.ts).
+        injectRoute({
+          pattern: ADMIN_FORMS_PATH,
+          entrypoint: fileURLToPath(new URL('./admin/pages/forms/index.astro', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_FORM_DETAIL_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/pages/forms/detail.astro', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_FORM_STATUS_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/forms-status.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: ADMIN_FORM_NOTIFY_PATTERN,
+          entrypoint: fileURLToPath(new URL('./admin/routes/forms-notify.js', import.meta.url)),
+          prerender: false,
+        });
+        injectRoute({
+          pattern: PUBLIC_FORM_SUBMIT_PATTERN,
+          entrypoint: fileURLToPath(new URL('./forms/public-submit.js', import.meta.url)),
           prerender: false,
         });
       },

@@ -21,6 +21,11 @@ export {
   type KreizContactRequestStatus,
 } from './tables/contact-requests.js';
 export {
+  contactNotificationStatuses,
+  type ContactNotificationStatus,
+  type KreizContactNotificationFailure,
+} from './tables/contact-requests.js';
+export {
   kreizAnalyticsEventNames,
   type KreizAnalyticsEventName,
 } from './tables/analytics-events.js';
@@ -54,6 +59,10 @@ export {
   createAdminAuditLogRepository,
   type AdminAuditLogRepository,
 } from './repositories/admin-audit-log.js';
+export {
+  createContactRequestsRepository,
+  type ContactRequestsRepository,
+} from './repositories/contact-requests.js';
 export { createRateLimitsRepository, type RateLimitsRepository } from './repositories/rate-limits.js';
 export {
   createContentEntriesRepository,

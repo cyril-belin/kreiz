@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeTestDb, query } from './db';
 import { stopHookServer } from './rebuild-hook-server';
+import { stopMailServer } from './mail-capture-server';
 import { stopStorageServer } from './storage-server';
 
 /**
@@ -70,6 +71,10 @@ const CLEANUP: Array<[string, unknown[]]> = [
     [],
   ],
   [`delete from kreiz_media where uploaded_by in (select id from kreiz_admin_users where email like 'e2e-%')`, []],
+  // Contact (slice 7) : audit des demandes d'abord (acteur NULL), puis les
+  // demandes marquées par l'email e2e- du payload.
+  [`delete from kreiz_admin_audit_log where entity_type = 'contact_request'`, []],
+  [`delete from kreiz_contact_requests where payload->>'email' like 'e2e-%'`, []],
   ["delete from kreiz_admin_users where email like 'e2e-%'", []],
   ['delete from kreiz_rate_limits', []],
 ];
@@ -83,6 +88,7 @@ export default async function globalTeardown(): Promise<void> {
     rmSync(join(import.meta.dirname, '.media-state.json'), { force: true });
     stopStorageServer();
     await stopHookServer();
+    await stopMailServer();
     await closeTestDb();
   }
 }

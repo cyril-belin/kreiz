@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { createS3ObjectStorage, S3ObjectStorage } from '../adapters/storage/s3.js';
+import { createWebhookMailer } from '../adapters/mailer/webhook.js';
+import type { MailAddress, Mailer } from '../ports/mailer.js';
 import {
   createKreizDatabase,
   kreizDatabaseEnvSchema,
@@ -8,6 +10,7 @@ import {
 import { createAdminAuthServiceForDatabase, type AdminAuthService } from '../services/admin-auth.js';
 import { createNoopRebuildTrigger, type RebuildTrigger } from '../ports/rebuild.js';
 import { createVercelDeployHookTrigger } from '../adapters/vercel/rebuild.js';
+import { isSafeEmailAddress, isSafeHeaderValue } from '../domain/forms/policy.js';
 
 /**
  * Environnement runtime des routes admin injectées par le Core.
@@ -73,6 +76,46 @@ export const kreizAdminEnvSchema = z.object({
   KREIZ_REBUILD_DEPLOY_HOOK_URL: z.url().optional(),
   /** Bloc storage S3-compatible (médias, slice 5) — optionnel, tout ou rien. */
   ...kreizStorageEnvSchema.shape,
+  /**
+   * Bloc mail (formulaires, slice 7) — **optionnel** ; l'URL du relais
+   * implique l'expéditeur d'enveloppe (`KREIZ_MAIL_FROM_EMAIL`, tout ou
+   * rien : jamais un mailer à moitié câblé). Le token porteur est
+   * optionnel mais exige l'URL. Secrets : jamais loggués, jamais rendus.
+   */
+  KREIZ_MAIL_WEBHOOK_URL: z.url().optional(),
+  KREIZ_MAIL_WEBHOOK_TOKEN: z.string().min(1).max(255).optional(),
+  KREIZ_MAIL_FROM_EMAIL: z.string().optional(),
+  KREIZ_MAIL_FROM_NAME: z
+    .string()
+    .min(1)
+    .max(120)
+    .refine(isSafeHeaderValue, 'KREIZ_MAIL_FROM_NAME invalide (aucun caractère de contrôle)')
+    .optional(),
+}).superRefine((value, ctx) => {
+  const hasUrl = value.KREIZ_MAIL_WEBHOOK_URL !== undefined && value.KREIZ_MAIL_WEBHOOK_URL !== '';
+  const hasFrom = value.KREIZ_MAIL_FROM_EMAIL !== undefined && value.KREIZ_MAIL_FROM_EMAIL !== '';
+  const hasToken = value.KREIZ_MAIL_WEBHOOK_TOKEN !== undefined && value.KREIZ_MAIL_WEBHOOK_TOKEN !== '';
+  if (!hasUrl && hasToken) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['KREIZ_MAIL_WEBHOOK_TOKEN'],
+      message: 'KREIZ_MAIL_WEBHOOK_TOKEN est défini sans KREIZ_MAIL_WEBHOOK_URL — définissez le relais aussi.',
+    });
+  }
+  if (hasUrl && !hasFrom) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['KREIZ_MAIL_FROM_EMAIL'],
+      message: 'bloc mail incomplet — KREIZ_MAIL_FROM_EMAIL est requis quand KREIZ_MAIL_WEBHOOK_URL est défini.',
+    });
+  }
+  if (hasFrom && !isSafeEmailAddress(value.KREIZ_MAIL_FROM_EMAIL ?? '')) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['KREIZ_MAIL_FROM_EMAIL'],
+      message: 'KREIZ_MAIL_FROM_EMAIL doit être une adresse email valide (aucun caractère de contrôle).',
+    });
+  }
 });
 
 export type KreizAdminEnv = {
@@ -88,6 +131,12 @@ export type KreizAdminEnv = {
     secretAccessKey: string;
     region: string | null;
     publicBaseUrl: string;
+  } | null;
+  /** Configuration du relais email, ou `null` si aucun transport n'est configuré. */
+  mail: {
+    webhookUrl: string;
+    webhookToken: string | null;
+    from: MailAddress;
   } | null;
 };
 
@@ -112,11 +161,23 @@ export function parseKreizAdminEnv(env: unknown): KreizAdminEnv {
           publicBaseUrl: data.KREIZ_STORAGE_PUBLIC_BASE_URL,
         }
       : null;
+  const mail =
+    data.KREIZ_MAIL_WEBHOOK_URL && data.KREIZ_MAIL_FROM_EMAIL
+      ? {
+          webhookUrl: data.KREIZ_MAIL_WEBHOOK_URL,
+          webhookToken: data.KREIZ_MAIL_WEBHOOK_TOKEN ?? null,
+          from: {
+            email: data.KREIZ_MAIL_FROM_EMAIL,
+            ...(data.KREIZ_MAIL_FROM_NAME ? { name: data.KREIZ_MAIL_FROM_NAME } : {}),
+          },
+        }
+      : null;
   return {
     databaseUrl: data.KREIZ_DATABASE_URL,
     secret: data.KREIZ_SECRET,
     rebuildHookUrl: data.KREIZ_REBUILD_DEPLOY_HOOK_URL ?? null,
     storage,
+    mail,
   };
 }
 
@@ -138,9 +199,18 @@ export type KreizAdminRuntime = {
   storage: S3ObjectStorage | null;
   /** Base publique des variantes, ou `null` — résolution des URLs publiques. */
   mediaPublicBaseUrl: string | null;
+  /** Port Mailer configuré, ou `null` — les demandes restent stockées sans lui (slice 7). */
+  mailer: Mailer | null;
+  /** Expéditeur d'enveloppe des notifications, ou `null` (lié au bloc mail). */
+  mailFrom: MailAddress | null;
+  /**
+   * Secret de déploiement — signatures du domaine contact (jeton
+   * d'émission, idempotence). Server-side uniquement, jamais rendu.
+   */
+  secret: string;
 };
 
-export function createKreizAdminRuntime(env: KreizAdminEnv, options: { allowInsecureRebuildHook?: boolean } = {}): KreizAdminRuntime {
+export function createKreizAdminRuntime(env: KreizAdminEnv, options: { allowInsecureRebuildHook?: boolean; allowInsecureMailWebhook?: boolean } = {}): KreizAdminRuntime {
   const db = createKreizDatabase({ databaseUrl: env.databaseUrl });
   const auth = createAdminAuthServiceForDatabase(db, { secret: env.secret });
   // HTTPS imposé hors dev (mission §37) : la production (Vercel) refuse un
@@ -164,6 +234,15 @@ export function createKreizAdminRuntime(env: KreizAdminEnv, options: { allowInse
         ...(env.storage.region ? { region: env.storage.region } : {}),
       })
     : null;
+  // Relais email (slice 7) : mêmes règles que le deploy hook (HTTPS en
+  // production, URL secrète jamais exposée).
+  const mailer: Mailer | null = env.mail
+    ? createWebhookMailer({
+        webhookUrl: env.mail.webhookUrl,
+        ...(env.mail.webhookToken ? { token: env.mail.webhookToken } : {}),
+        allowInsecureHttp: options.allowInsecureMailWebhook ?? false,
+      })
+    : null;
   return {
     db,
     auth,
@@ -171,6 +250,9 @@ export function createKreizAdminRuntime(env: KreizAdminEnv, options: { allowInse
     rebuildProvider: env.rebuildHookUrl ? 'vercel-deploy-hook' : null,
     storage,
     mediaPublicBaseUrl: env.storage?.publicBaseUrl ?? null,
+    mailer,
+    mailFrom: env.mail?.from ?? null,
+    secret: env.secret,
   };
 }
 
@@ -178,9 +260,9 @@ let cachedRuntime: { key: string; runtime: KreizAdminRuntime } | null = null;
 
 /**
  * Résout l'environnement du processus et retourne le runtime admin (memoïsé).
- * Le hook de rebuild n'impose HTTPS qu'en production (`import.meta.env.PROD`
- * n'existe que dans le bundle Vite — absent des tests Node purs, qui passent
- * explicitement par `createKreizAdminRuntime`).
+ * Le hook de rebuild et le relais email n'imposent HTTPS qu'en production
+ * (`import.meta.env.PROD` n'existe que dans le bundle Vite — absent des
+ * tests Node purs, qui passent explicitement par `createKreizAdminRuntime`).
  */
 export function getKreizAdminRuntime(): KreizAdminRuntime {
   const env = parseKreizAdminEnv(process.env);
@@ -194,12 +276,19 @@ export function getKreizAdminRuntime(): KreizAdminRuntime {
     env.storage?.secretAccessKey ?? '',
     env.storage?.region ?? '',
     env.storage?.publicBaseUrl ?? '',
+    env.mail?.webhookUrl ?? '',
+    env.mail?.webhookToken ?? '',
+    env.mail?.from.email ?? '',
+    env.mail?.from.name ?? '',
   ].join('\u0000');
   if (cachedRuntime?.key !== key) {
     const prod = import.meta.env?.PROD === true;
     cachedRuntime = {
       key,
-      runtime: createKreizAdminRuntime(env, { allowInsecureRebuildHook: !prod }),
+      runtime: createKreizAdminRuntime(env, {
+        allowInsecureRebuildHook: !prod,
+        allowInsecureMailWebhook: !prod,
+      }),
     };
   }
   return cachedRuntime.runtime;

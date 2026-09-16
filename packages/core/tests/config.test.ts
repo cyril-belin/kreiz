@@ -75,3 +75,96 @@ describe('kreizConfigSchema', () => {
     expect(() => kreizConfigSchema.parse({ content: { types: [withoutTemplate] } })).toThrow();
   });
 });
+
+// ——— Formulaires de contact (slice 7) ———
+
+import { defineContactForm } from '../src/domain/forms/declaration';
+import { formFields } from '../src/domain/forms/fields';
+import type { ContactFormDefinition } from '../src/domain/forms/declaration';
+
+function contactDefinition(): ContactFormDefinition {
+  return defineContactForm({
+    key: 'contact',
+    label: 'Contact',
+    fields: {
+      name: formFields.text({ label: 'Nom', required: true }),
+      email: formFields.email({ label: 'Email', required: true }),
+    },
+    confirmationPath: '/contact/merci',
+    notification: { recipients: ['dest@example.test'], subject: 'Sujet' },
+  });
+}
+
+describe('kreizConfigSchema — formulaires', () => {
+  it('normalise les formulaires déclarés (payloadSchema non sérialisé)', () => {
+    const config = normalizeKreizConfig({ forms: [contactDefinition()] });
+    expect(config.forms).toHaveLength(1);
+    expect(config.forms?.[0]?.key).toBe('contact');
+    expect(config.forms?.[0]?.confirmationPath).toBe('/contact/merci');
+    expect(config.forms?.[0]?.notification?.recipients).toEqual(['dest@example.test']);
+    expect('payloadSchema' in (config.forms?.[0] ?? {})).toBe(false);
+  });
+
+  it('rejette une clé de formulaire invalide', () => {
+    expect(() =>
+      kreizConfigSchema.parse({ forms: [{ ...contactDefinition(), key: 'Bad Key' }] }),
+    ).toThrow();
+  });
+
+  it('rejette un chemin de confirmation externe', () => {
+    expect(() =>
+      kreizConfigSchema.parse({
+        forms: [{ ...contactDefinition(), confirmationPath: 'https://evil.example' }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejette des destinataires hors borne ou invalides', () => {
+    expect(() =>
+      kreizConfigSchema.parse({
+        forms: [
+          {
+            ...contactDefinition(),
+            notification: { recipients: ['nope'], subject: 's' },
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      kreizConfigSchema.parse({
+        forms: [
+          {
+            ...contactDefinition(),
+            notification: { recipients: [], subject: 's' },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('rejette un sujet avec caractère de contrôle', () => {
+    expect(() =>
+      kreizConfigSchema.parse({
+        forms: [
+          {
+            ...contactDefinition(),
+            notification: { recipients: ['a@b.test'], subject: 's\r\nX: y' },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('rejette des champs hors vocabulaire formulaires', () => {
+    expect(() =>
+      kreizConfigSchema.parse({
+        forms: [
+          {
+            ...contactDefinition(),
+            fields: { x: { kind: 'richText', label: 'x' } },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+});

@@ -1,10 +1,14 @@
 import { getContentRegistry } from '../content/runtime.js';
+import { getContactFormRegistry } from '../forms/runtime.js';
 import { createAdminAuditLogRepository } from '../data/repositories/admin-audit-log.js';
+import { createContactRequestsRepository } from '../data/repositories/contact-requests.js';
 import { createContentEntriesRepository } from '../data/repositories/content-entries.js';
 import { createMediaRepository } from '../data/repositories/media.js';
 import { createRedirectsRepository } from '../data/repositories/redirects.js';
+import { createRateLimitsRepository } from '../data/repositories/rate-limits.js';
 import { createScheduledBackgroundJobs, fireAndForgetScheduler, waitUntilScheduler } from '../adapters/jobs.js';
 import { createSharpImageTransformer } from '../adapters/image/sharp.js';
+import { createContactService, type ContactService } from '../services/contact.js';
 import { createContentService, type ContentService } from '../services/content.js';
 import { createMediaAdminService, type MediaAdminService } from '../services/media-admin.js';
 import { createMediaProcessingService, type MediaProcessingService } from '../services/media-processing.js';
@@ -16,17 +20,19 @@ import { getKreizAdminRuntime, type KreizAdminRuntime } from './server-env.js';
 
 /**
  * Composition root des pages du moteur de contenu : runtime admin (base +
- * auth + port de rebuild + storage média) **plus** les services contenu,
- * publication et médias construits sur le registre des types du Project
- * (module virtuel). Memoïsé par identité du runtime de base — une seule
- * revalidation du registre par processus.
+ * auth + port de rebuild + storage média + bloc mail) **plus** les services
+ * contenu, publication, médias et contact construits sur les registres des
+ * types et formulaires du Project (module virtuel). Memoïsé par identité du
+ * runtime de base — une seule revalidation des registres par processus.
  *
  * Les services média sont `null` quand **aucun stockage n'est configuré**
  * (`KREIZ_STORAGE_*` absentes) : la page /admin/media affiche un état
- * explicite « non configuré » — jamais un service à moitié câblé.
+ * explicite « non configuré » — jamais un service à moitié câblé. Le
+ * service contact existe toujours : sans bloc mail, les demandes restent
+ * stockées et notifiées `not_configured` (cadrage §13).
  *
  * Ce module n'est importable que dans un contexte Vite/Astro (il tire le
- * module virtuel) : les services et tests injectent un registre explicite.
+ * module virtuel) : les services et tests injectent des registres explicites.
  */
 export interface KreizContentRuntime extends KreizAdminRuntime {
   content: ContentService;
@@ -35,6 +41,8 @@ export interface KreizContentRuntime extends KreizAdminRuntime {
   processing: MediaProcessingService | null;
   mediaAdmin: MediaAdminService | null;
   recovery: MediaRecoveryService | null;
+  /** Demandes de contact — soumission publique, boîte admin, relances. */
+  contact: ContactService;
 }
 
 let cached: { base: KreizAdminRuntime; runtime: KreizContentRuntime } | null = null;
@@ -46,7 +54,10 @@ export function getKreizContentRuntime(): KreizContentRuntime {
     const media = createMediaRepository(base.db);
     const audit = createAdminAuditLogRepository(base.db);
     const redirects = createRedirectsRepository(base.db);
+    const rateLimits = createRateLimitsRepository(base.db);
+    const requests = createContactRequestsRepository(base.db);
     const registry = getContentRegistry();
+    const forms = getContactFormRegistry();
     const mediaPublicBaseUrl = base.mediaPublicBaseUrl;
     const content = createContentService({
       entries,
@@ -64,6 +75,15 @@ export function getKreizContentRuntime(): KreizContentRuntime {
       registry,
       rebuild: base.rebuild,
       mediaPublicBaseUrl,
+    });
+    const contact = createContactService({
+      requests,
+      rateLimits,
+      audit,
+      mailer: base.mailer,
+      mailFrom: base.mailFrom,
+      secret: base.secret,
+      forms: { findById: (formId) => forms.findByKey(formId) },
     });
     const mediaServices = base.storage
       ? (() => {
@@ -99,6 +119,7 @@ export function getKreizContentRuntime(): KreizContentRuntime {
         processing: mediaServices.processing,
         mediaAdmin: mediaServices.mediaAdmin,
         recovery: mediaServices.recovery,
+        contact,
       },
     };
   }

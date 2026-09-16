@@ -7,8 +7,9 @@
  *
  * > **Toute route nécessitant la session admin doit vivre sous `/admin/*`**
  * > (pages, endpoints d'action, `/admin/api/...`). Les endpoints publics
- * > (`/api/contact`, `/api/analytics`…) restent hors `/admin` et ne
- * > dépendent jamais de la session admin.
+ * > (`/api/forms/<key>`, `/api/analytics`…) restent hors `/admin`, sont
+ * > listés dans `PUBLIC_ROUTE_PATTERNS` (garde mécanique : jamais sous le
+ * > préfixe) et ne dépendent jamais de la session admin.
  *
  * Les patterns de routes injectées sont déclarés ici et consommés par
  * l'intégration ; le test garde `admin-routes.test.ts` vérifie mécaniquement
@@ -67,6 +68,28 @@ export const ADMIN_MEDIA_RETRY_PATTERN = '/admin/media/[id]/retry';
 /** Suppression (référencé = refusé, mission §26) — mutation POST. */
 export const ADMIN_MEDIA_DELETE_PATTERN = '/admin/media/[id]/delete';
 
+// ——— Formulaires / boîte de contact (slice 7) — toutes SSR sous /admin ———
+
+/** Boîte de contact : liste des demandes (`?status=new` pour les non traitées). */
+export const ADMIN_FORMS_PATH = '/admin/forms';
+/** Détail d'une demande (payload, état de notification, actions). */
+export const ADMIN_FORM_DETAIL_PATTERN = '/admin/forms/[id]';
+/** Transition `new` ⇄ `handled` — mutation POST. */
+export const ADMIN_FORM_STATUS_PATTERN = '/admin/forms/[id]/status';
+/** Relance de la notification email — mutation POST. */
+export const ADMIN_FORM_NOTIFY_PATTERN = '/admin/forms/[id]/notify';
+
+// ——— Endpoint PUBLIC de soumission (slice 7) — hors /admin, sans session ———
+
+/**
+ * **Route publique** : `/api/forms/[key]` (cadrage §5 — POST formulaires ;
+ * cadrage §2/§10 : le cookie de session admin vit sous `Path=/admin`, une
+ * route publique doit donc vivre **hors** du préfixe et ne dépend jamais de
+ * la session). Liste séparée de `ADMIN_ROUTE_PATTERNS`, garde mécanique
+ * dédiée dans `tests/admin-routes.test.ts`.
+ */
+export const PUBLIC_FORM_SUBMIT_PATTERN = '/api/forms/[key]';
+
 /** Patterns des routes admin injectées par l'intégration (tous sous le préfixe). */
 export const ADMIN_ROUTE_PATTERNS = [
   ADMIN_HOME_PATH,
@@ -88,7 +111,14 @@ export const ADMIN_ROUTE_PATTERNS = [
   ADMIN_MEDIA_ALT_PATTERN,
   ADMIN_MEDIA_RETRY_PATTERN,
   ADMIN_MEDIA_DELETE_PATTERN,
+  ADMIN_FORMS_PATH,
+  ADMIN_FORM_DETAIL_PATTERN,
+  ADMIN_FORM_STATUS_PATTERN,
+  ADMIN_FORM_NOTIFY_PATTERN,
 ] as const;
+
+/** Patterns des routes **publiques** injectées par l'intégration (jamais sous /admin). */
+export const PUBLIC_ROUTE_PATTERNS = [PUBLIC_FORM_SUBMIT_PATTERN] as const;
 
 // ——— Constructeurs d'URL admin (pages et formulaires) ———
 
@@ -140,4 +170,18 @@ export function adminMediaRetryPath(mediaId: string): string {
 
 export function adminMediaDeletePath(mediaId: string): string {
   return `${ADMIN_MEDIA_PATH}/${encodeURIComponent(mediaId)}/delete`;
+}
+
+// ——— Constructeurs d'URL boîte de contact (slice 7) ———
+
+export function adminFormDetailPath(requestId: string): string {
+  return `${ADMIN_FORMS_PATH}/${encodeURIComponent(requestId)}`;
+}
+
+export function adminFormStatusPath(requestId: string): string {
+  return `${adminFormDetailPath(requestId)}/status`;
+}
+
+export function adminFormNotifyPath(requestId: string): string {
+  return `${adminFormDetailPath(requestId)}/notify`;
 }

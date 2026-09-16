@@ -34,6 +34,10 @@
       "types": "./dist/rich-text/index.d.ts",
       "default": "./dist/rich-text/index.js"
     },
+    "./forms": {
+      "types": "./dist/forms/index.d.ts",
+      "default": "./dist/forms/index.js"
+    },
     "./virtual": {
       "types": "./dist/virtual.d.ts"
     },

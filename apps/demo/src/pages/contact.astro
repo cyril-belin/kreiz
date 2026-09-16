@@ -1,0 +1,42 @@
+---
+import '../styles/global.css';
+import { renderContactFormHtml, issueFormToken } from '@kreiz/core/forms';
+import { contactForm } from '../forms/contact.js';
+
+/**
+ * Page publique du formulaire de contact — **statique** : le HTML du
+ * formulaire est rendu au build par le renderer du Core et publié tel quel
+ * (POST vers l'endpoint SSR injecté, /api/forms/contact). Le jeton
+ * d'émission est signé au rendu avec KREIZ_SECRET : sans secret (build de
+ * fork), le formulaire s'affiche mais la soumission sera refusée — état
+ * documenté dans .env.example, jamais un échec silencieux en production.
+ */
+const token = issueFormToken({
+  formKey: contactForm.key,
+  secret: process.env.KREIZ_SECRET ?? null,
+}).token;
+const formHtml = renderContactFormHtml({ form: contactForm, token });
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contact — Kreiz demo</title>
+  </head>
+  <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+    <main class="mx-auto max-w-2xl px-6 py-24">
+      <p class="text-xs font-medium uppercase tracking-widest text-neutral-400">Slice 7 — formulaires</p>
+      <h1 class="mt-3 text-3xl font-semibold tracking-tight">Contact</h1>
+      <p class="mt-4 leading-relaxed text-neutral-300">
+        Formulaire rendu par le Core, soumis en POST classique — il fonctionne
+        sans JavaScript. Validation stricte côté serveur, anti-spam en couches,
+        demande stockée même si l'email de notification échoue.
+      </p>
+      <div class="mt-10 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6" set:html={formHtml} />
+      <p class="mt-6 text-sm text-neutral-400">
+        <a class="underline hover:text-neutral-200" href="/">← Retour à l'accueil</a>
+      </p>
+    </main>
+  </body>
+</html>

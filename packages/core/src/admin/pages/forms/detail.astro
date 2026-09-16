@@ -1,0 +1,142 @@
+---
+export const prerender = false;
+
+import AdminShell from '../../components/AdminShell.astro';
+import MessagePanel from '../../components/MessagePanel.astro';
+import {
+  ADMIN_FORMS_PATH,
+  adminFormNotifyPath,
+  adminFormStatusPath,
+} from '../../../http/admin-routes.js';
+import { CSRF_FORM_FIELD } from '../../../http/csrf.js';
+import { authenticateContentPage } from '../../lib/content-page.js';
+import { getContactFormRegistry } from '../../../forms/runtime.js';
+
+/**
+ * Détail d'une demande de contact — seul rendu des données visiteur dans
+ * l'admin (échappement Astro natif : toute valeur est insérée en texte).
+ * Actions progressives (formulaires POST sans JavaScript) : transition
+ * traité/nouveau et relance de la notification.
+ */
+
+const access = await authenticateContentPage(Astro);
+if (access.kind === 'unauthenticated') {
+  return Astro.redirect('/admin/login', 302);
+}
+
+const requestId = Astro.params.id ?? '';
+const request = await access.runtime.contact.getRequest(requestId);
+
+const formDeclaration = request ? getContactFormRegistry().findByKey(request.formId) : null;
+const mailerConfigured = access.runtime.mailer !== null && access.runtime.mailFrom !== null;
+
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
+const notifyResult = Astro.url.searchParams.get('notify');
+const statusResult = Astro.url.searchParams.get('status');
+---
+
+<AdminShell
+  title="Demande de contact"
+  admin={access.access.admin}
+  csrfToken={access.access.csrfToken}
+  currentPath={Astro.url.pathname}
+>
+  <div class="kz-page-actions">
+    <a class="kz-button kz-button--ghost" href={ADMIN_FORMS_PATH}>← Boîte de contact</a>
+  </div>
+
+  {
+    !request ? (
+      <MessagePanel
+        title="Demande introuvable"
+        description="Cette demande n'existe pas ou a été supprimée de la base."
+        backHref={ADMIN_FORMS_PATH}
+        backLabel="Retour à la boîte de contact"
+      />
+    ) : (
+      <>
+        {statusResult === '1' && (
+          <div class="kz-banner kz-banner--success" role="status">État de la demande mis à jour.</div>
+        )}
+        {statusResult === 'invalid' && (
+          <div class="kz-banner kz-banner--warning" role="alert">État demandé inconnu — aucune modification.</div>
+        )}
+        {notifyResult === 'sent' && (
+          <div class="kz-banner kz-banner--success" role="status">Notification envoyée.</div>
+        )}
+        {notifyResult === 'failed' && (
+          <div class="kz-banner kz-banner--warning" role="alert">
+            La notification a de nouveau échoué — la demande reste intacte, vous pouvez relancer plus tard.
+          </div>
+        )}
+        {notifyResult === 'unconfigured' && (
+          <div class="kz-banner kz-banner--warning" role="alert">
+            Aucun transport email n'est configuré (KREIZ_MAIL_WEBHOOK_URL) — la demande reste stockée.
+          </div>
+        )}
+        {notifyResult === 'missing' && (
+          <div class="kz-banner kz-banner--warning" role="alert">Demande introuvable.</div>
+        )}
+
+        <section class="kz-panel" aria-labelledby="kz-form-meta">
+          <h2 class="kz-panel__title" id="kz-form-meta">
+            {formDeclaration ? formDeclaration.label : `Formulaire « ${request.formId} »`}
+          </h2>
+          <dl>
+            <dt>Reçue le</dt>
+            <dd>{dateFormatter.format(request.createdAt)}</dd>
+            <dt>État</dt>
+            <dd>{request.status === 'new' ? 'Nouvelle' : 'Traitée'}</dd>
+            <dt>Notification</dt>
+            <dd>
+              {request.notificationStatus === 'sent' && request.notifiedAt
+                ? `Envoyée le ${dateFormatter.format(request.notifiedAt)}`
+                : request.notificationStatus === 'not_configured'
+                  ? 'Aucun transport email configuré au moment de la réception'
+                  : request.notificationStatus === 'pending'
+                    ? 'En attente d’envoi'
+                    : `Échec${request.notificationAttempts > 0 ? ` après ${request.notificationAttempts} tentative${request.notificationAttempts > 1 ? 's' : ''}` : ''}${request.notificationFailure ? ` (${request.notificationFailure.kind})` : ''}`}
+            </dd>
+          </dl>
+          <div class="kz-row-actions">
+            <form method="post" action={adminFormStatusPath(request.id)}>
+              <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+              <input type="hidden" name="status" value={request.status === 'new' ? 'handled' : 'new'} />
+              <button class="kz-button" type="submit">
+                {request.status === 'new' ? 'Marquer comme traitée' : 'Rouvrir'}
+              </button>
+            </form>
+            {request.notificationStatus !== 'sent' && formDeclaration?.notification && (
+              <form method="post" action={adminFormNotifyPath(request.id)}>
+                <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+                <button class="kz-button" type="submit" disabled={!mailerConfigured}>
+                  {mailerConfigured
+                    ? 'Renvoyer la notification'
+                    : 'Renvoi impossible — transport non configuré'}
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
+
+        <section class="kz-panel" aria-labelledby="kz-form-payload">
+          <h2 class="kz-panel__title" id="kz-form-payload">Message</h2>
+          <dl>
+            {Object.entries(request.payload).map(([key, value]) => {
+              const descriptor = formDeclaration?.fields[key];
+              const label = descriptor ? descriptor.label : key;
+              return (
+                <>
+                  <dt>{label}</dt>
+                  <dd>
+                    {typeof value === 'boolean' ? (value ? 'oui' : 'non') : value}
+                  </dd>
+                </>
+              );
+            })}
+          </dl>
+        </section>
+      </>
+    )
+  }
+</AdminShell>

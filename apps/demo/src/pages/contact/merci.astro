@@ -1,0 +1,31 @@
+---
+import '../../styles/global.css';
+
+/**
+ * Page de remerciement — chemin déclaré dans la déclaration du formulaire
+ * (`confirmationPath`) : destination de la redirection 303 post-soumission
+ * (PRG, empêche la resoumission au refresh). Statique, sans données.
+ */
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Message envoyé — Kreiz demo</title>
+  </head>
+  <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+    <main class="mx-auto max-w-2xl px-6 py-24">
+      <p class="text-xs font-medium uppercase tracking-widest text-neutral-400">Contact</p>
+      <h1 class="mt-3 text-3xl font-semibold tracking-tight">Merci, votre message est bien reçu.</h1>
+      <p class="mt-4 leading-relaxed text-neutral-300">
+        Votre demande a été enregistrée. Nous vous répondrons à l'adresse que
+        vous avez indiquée.
+      </p>
+      <p class="mt-6 text-sm text-neutral-400">
+        <a class="underline hover:text-neutral-200" href="/">← Retour à l'accueil</a>
+      </p>
+    </main>
+  </body>
+</html>

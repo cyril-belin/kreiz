@@ -22,12 +22,20 @@ project's real templates), the slice 4 publication layer (publish/unpublish with
 "last public state", a platform-agnostic `RebuildTrigger` port with a Vercel deploy-hook
 reference adapter, automatic 301 redirects on published slug changes with chain
 normalization and loop prevention, build-time redirect materialization and a manual rebuild
-action) and the slice 5 media pipeline (direct presigned browser uploads to any
+action), the slice 5 media pipeline (direct presigned browser uploads to any
 S3-compatible object storage behind an `ObjectStorage` port, server-side verification of the
 uploaded object, an explicit `uploading → processing → ready | failed` lifecycle, async
 Sharp variants behind `ImageTransformer` and `BackgroundJobs` ports, a media library with
 retry/recovery, content cover selection and public snapshotting, responsive
-`<picture>` helpers). Features listed in the roadmap below that are not covered by these
+`<picture>` helpers), the slice 6 rich text engine (canonical versioned `RichTextDocument`
+format validated server-side, a Tiptap admin editor behind a strict domain boundary and a
+deterministic public HTML renderer) and the slice 7 contact forms (code-declared contact
+forms with a bounded field vocabulary, no-JS progressive HTML rendering behind a signed
+issuance token, layered anti-spam — honeypot, minimum fill time, PostgreSQL rate limiting —
+server-computed idempotency against double submissions, a provider-agnostic `Mailer` port
+with a webhook reference adapter, submissions persisted before any notification attempt so
+an email failure never loses data, retry/recovery with backoff and a minimal admin inbox).
+Features listed in the roadmap below that are not covered by these
 slices are planned, not shipped.
 
 ## Current architecture
@@ -37,8 +45,11 @@ slices are planned, not shipped.
 - Astro 7, TypeScript strict, Tailwind CSS 4, Vue islands where interactivity earns its cost
 - The core ships an Astro integration: admin and API routes are injected into the host app
   via `injectRoute()` (`/admin/login`, `/admin`, `/admin/logout`, content CRUD under
-  `/admin/content/*`, `/admin/preview/[id]` — all SSR, no admin plumbing is written by the
-  consuming project)
+  `/admin/content/*`, `/admin/preview/[id]`, the media library under `/admin/media/*`, the
+  contact inbox under `/admin/forms/*` — all SSR — plus the single public endpoint
+  `/api/forms/[key]`; the admin routes all live under the `/admin` cookie invariant, the
+  public one is mechanically guarded out of it). No admin or forms plumbing is written by
+  the consuming project
 - Authentication: email + Argon2id (OWASP parameters), server-side revocable sessions
   (raw token only in a hardened cookie, SHA-256 in the database), sliding 14-day expiry
   with a 90-day absolute cap, login rate limiting on PostgreSQL, session-bound CSRF,
@@ -75,6 +86,19 @@ slices are planned, not shipped.
   model consumed by the project's templates (responsive `<picture>` helpers in
   `@kreiz/core/media`). Storage is configured via the `KREIZ_STORAGE_*` runtime env
   (optional, all-or-nothing; see `apps/demo/.env.example`)
+- Contact forms: declared in code via `defineContactForm()` (`@kreiz/core/forms`) with a
+  bounded field vocabulary, rendered as progressive HTML that works with **zero JavaScript**;
+  the single public route Kreiz injects (`/api/forms/[key]`, never under `/admin`, no admin
+  session) validates layered anti-spam — HMAC-signed issuance token proving the visitor
+  received a real page, honeypot, minimum fill time, PostgreSQL rate limiting (5 / 10 min
+  per IP hash), strict derived-schema validation with size bounds — and computes
+  idempotency **server-side** (unique partial index) so double submissions never create
+  duplicates. Submissions are persisted **before** any notification attempt: through the
+  provider-agnostic `Mailer` port (webhook reference adapter, `KREIZ_MAIL_*` env,
+  all-or-nothing, HTTPS enforced in production) a transport failure is recorded with retry,
+  backoff, admin re-send and a recovery sweep — never a lost message, never an error shown
+  to the sender. Envelope addresses come exclusively from code declarations (no open
+  relay); the minimal admin inbox lives under `/admin/forms` with audited status changes
 - The `kreiz` CLI creates the first admin and resets passwords (`admin:create`,
   `admin:reset-password`)
 - Project → core configuration flows through a typed Vite virtual module,
@@ -84,9 +108,9 @@ slices are planned, not shipped.
 
 ## Roadmap
 
-Planned foundations, in build order: Neon/Drizzle data layer · admin authentication ·
-content engine (code-declared content types, drafts, publishing) · media pipeline ·
-public forms · internal analytics · SEO. See the design doc for scope and rationale.
+Planned foundations, in build order: ~~Neon/Drizzle data layer~~ · ~~admin authentication~~ ·
+~~content engine (code-declared content types, drafts, publishing)~~ · ~~media pipeline~~ ·
+~~public forms~~ · internal analytics · SEO. See the design doc for scope and rationale.
 
 ## Documentation
 
@@ -111,6 +135,7 @@ Database (migrations live in `apps/demo` — the app owns them, not the core):
 cp apps/demo/.env.example apps/demo/.env   # then set KREIZ_DATABASE_URL (Neon branch)
                                            # and KREIZ_SECRET (openssl rand -base64 32)
                                            # optionally KREIZ_REBUILD_DEPLOY_HOOK_URL
+                                           # optionally KREIZ_MAIL_* (contact notifications)
 pnpm db:generate                           # drizzle-kit generate from the composed schema
 pnpm db:migrate                            # apply apps/demo migrations (Neon HTTP driver)
 pnpm test:integration                      # against $KREIZ_DATABASE_URL (Neon) or

@@ -17,6 +17,9 @@ if (access.kind === 'unauthenticated') {
 // manuelle. Absence d'adapter = état normal signalé, jamais une erreur.
 const rebuildProvider = access.runtime.rebuildProvider;
 const rebuildBanner = Astro.url.searchParams.get('rebuild');
+
+// Boîte de contact (slice 7) : compteur des demandes non traitées.
+const newContactRequests = await access.runtime.contact.countNew();
 ---
 
 <AdminShell
@@ -42,8 +45,7 @@ const rebuildBanner = Astro.url.searchParams.get('rebuild');
     </h2>
     <p class="kz-panel__text">
       Vous êtes authentifié·e. Gérez les contenus déclarés par le projet depuis
-      la section « Contenu » ; les modules médias, formulaires et analytics
-      arrivent dans les prochains slices.
+      la section « Contenu » ; le module analytics arrive dans un prochain slice.
     </p>
     <dl>
       <dt>Session</dt>
@@ -54,6 +56,18 @@ const rebuildBanner = Astro.url.searchParams.get('rebuild');
       <dt>Limite absolue</dt>
       <dd>{access.access.session.absoluteExpiresAt.toLocaleDateString('fr-FR')}</dd>
     </dl>
+  </section>
+
+  <section class="kz-panel" aria-labelledby="kz-contact-title">
+    <h2 class="kz-panel__title" id="kz-contact-title">Boîte de contact</h2>
+    <p class="kz-panel__text">
+      {newContactRequests === 0
+        ? 'Aucune demande de contact non traitée.'
+        : `${newContactRequests} demande${newContactRequests > 1 ? 's' : ''} de contact à traiter.`}
+    </p>
+    <p>
+      <a class="kz-button" href="/admin/forms">Ouvrir la boîte de contact</a>
+    </p>
   </section>
 
   <section class="kz-panel" aria-labelledby="kz-site-title">
