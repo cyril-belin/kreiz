@@ -36,14 +36,17 @@ export function verifyPassword(storedHash: string, password: string): Promise<bo
 /**
  * Vérification « appeau » : même coût Argon2id sur un email inconnu, pour
  * égaliser la latence des réponses de login et ne pas permettre la
- * détection d'un compte existant par le temps de réponse. Le résultat est
- * mis en cache par processus (le hachage factice est identique pour tous).
+ * détection d'un compte existant par le temps de réponse.
+ *
+ * Seul le hachage factice est mis en cache par processus (identique pour
+ * tous, sa génération n'a pas besoin d'être rejouée) — la vérification,
+ * elle, s'exécute intégralement à **chaque** appel : c'est elle qui porte
+ * le coût Argon2id à égaliser avec une vraie tentative de login. Mettre en
+ * cache la vérification elle-même (comme le faisait une version antérieure)
+ * romprait l'anti-énumération dès le deuxième appel du process.
  */
-let dummyVerifyPromise: Promise<boolean> | null = null;
+let dummyHashPromise: Promise<string> | null = null;
 export function dummyPasswordVerify(): Promise<boolean> {
-  dummyVerifyPromise ??= (async () => {
-    const dummyHash = await argon2Hash(crypto.randomUUID(), ARGON2ID_OPTIONS);
-    return argon2Verify(dummyHash, 'mot-de-passe-factice');
-  })();
-  return dummyVerifyPromise;
+  dummyHashPromise ??= argon2Hash(crypto.randomUUID(), ARGON2ID_OPTIONS);
+  return dummyHashPromise.then((dummyHash) => argon2Verify(dummyHash, 'mot-de-passe-factice'));
 }
