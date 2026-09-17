@@ -2,9 +2,12 @@
  * API publique data de Kreiz — sous-chemin `@kreiz/core/data`.
  *
  * C'est la seule porte vers la couche data : définitions de tables
- * (`defineCoreTables`), connexion serveur Neon/Drizzle, repositories.
- * Toute l'arborescence interne (`src`, `dist`) reste inaccessible par la
- * carte `exports` du package — la frontière du slice 0 reste intacte.
+ * (`defineCoreTables`) et connexion serveur Neon/Drizzle. Les repositories
+ * sont des internals du Core (ils parlent Drizzle pour le domaine) : ils ne
+ * font pas partie de l'API publique — le Project compose son schéma et
+ * migre, il n'accède jamais aux données Kreiz en direct. Toute l'arborescence
+ * interne (`src`, `dist`) reste inaccessible par la carte `exports` du
+ * package — la frontière du slice 0 reste intacte.
  */
 
 // Tables & composition
@@ -45,27 +48,3 @@ export type { KreizRateLimit, KreizRateLimitInsert } from './tables/rate-limits.
 // Connexion serveur
 export { createKreizDatabase, type KreizDatabase, type KreizDatabaseOptions } from './connection.js';
 export { kreizDatabaseEnvSchema, parseKreizDatabaseEnv, type KreizDatabaseEnv } from './env.js';
-
-// Repositories — seule frontière autorisée à parler à Drizzle/Neon pour le domaine Kreiz
-export {
-  createAdminUsersRepository,
-  type AdminUsersRepository,
-} from './repositories/admin-users.js';
-export {
-  createAdminSessionsRepository,
-  type AdminSessionsRepository,
-} from './repositories/admin-sessions.js';
-export {
-  createAdminAuditLogRepository,
-  type AdminAuditLogRepository,
-} from './repositories/admin-audit-log.js';
-export {
-  createContactRequestsRepository,
-  type ContactRequestsRepository,
-} from './repositories/contact-requests.js';
-export { createRateLimitsRepository, type RateLimitsRepository } from './repositories/rate-limits.js';
-export {
-  createContentEntriesRepository,
-  type ContentEntriesRepository,
-} from './repositories/content-entries.js';
-export { createRedirectsRepository, type RedirectsRepository } from './repositories/redirects.js';

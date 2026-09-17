@@ -1,4 +1,5 @@
 import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeTestDb, query } from './db';
 import { stopHookServer } from './rebuild-hook-server';
@@ -90,6 +91,9 @@ export default async function globalTeardown(): Promise<void> {
   } finally {
     rmSync(join(import.meta.dirname, '.media-state.json'), { force: true });
     rmSync(join(import.meta.dirname, '.seo-state.json'), { force: true });
+    // État du spec global (slice 10) : vit hors de l'arbre observé par le
+    // dev server (tmpdir) pour ne pas déclencher de reload Vite.
+    rmSync(join(tmpdir(), 'kreiz-core-happy-path-state.json'), { force: true });
     stopStorageServer();
     await stopHookServer();
     await stopMailServer();

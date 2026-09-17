@@ -1,11 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import {
-  createAdminAuditLogRepository,
-  createAdminSessionsRepository,
-  createAdminUsersRepository,
-  createRateLimitsRepository,
-} from '../../src/data';
+import { createAdminAuditLogRepository } from '../../src/data/repositories/admin-audit-log';
+import { createAdminSessionsRepository } from '../../src/data/repositories/admin-sessions';
+import { createAdminUsersRepository } from '../../src/data/repositories/admin-users';
+import { createRateLimitsRepository } from '../../src/data/repositories/rate-limits';
 import {
   createAdminAuthServiceForDatabase,
   type AdminAuthService,

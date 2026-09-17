@@ -1,12 +1,11 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import {
-  createAdminUsersRepository,
-  createContentEntriesRepository,
-  createRedirectsRepository,
-  type KreizAdminUser,
-  type KreizContentEntry,
-} from '../../src/data';
+// Internals du Core testés en direct (les factories de repositories ne font
+// plus partie de l'API publique de @kreiz/core/data — slice 10).
+import { createAdminUsersRepository } from '../../src/data/repositories/admin-users.js';
+import { createContentEntriesRepository } from '../../src/data/repositories/content-entries.js';
+import { createRedirectsRepository } from '../../src/data/repositories/redirects.js';
+import type { KreizAdminUser, KreizContentEntry } from '../../src/data';
 import {
   describeIntegration,
   expectPgError,
@@ -16,7 +15,7 @@ import {
 } from './helpers';
 
 /**
- * Preuve write → read → résultat typé via l'API publique des repositories,
+ * Preuve write → read → résultat typé via les repositories du Core,
  * contre Neon/PostgreSQL réel. Les données sont isolées par préfixe unique et
  * nettoyées en fin de run — aucun ordre implicite entre les tests.
  */

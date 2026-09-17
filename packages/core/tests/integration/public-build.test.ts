@@ -4,10 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import {
-  createAdminUsersRepository,
-  type KreizAdminUser,
-} from '../../src/data';
+import { createAdminUsersRepository } from '../../src/data/repositories/admin-users';
+import type { KreizAdminUser } from '../../src/data';
 import { createContentEntriesRepository } from '../../src/data/repositories/content-entries';
 import { createMediaRepository } from '../../src/data/repositories/media';
 import { createRedirectsRepository } from '../../src/data/repositories/redirects';

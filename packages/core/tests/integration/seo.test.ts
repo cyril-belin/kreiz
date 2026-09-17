@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createAdminUsersRepository, type KreizAdminUser } from '../../src/data';
+import { createAdminUsersRepository } from '../../src/data/repositories/admin-users';
+import type { KreizAdminUser } from '../../src/data';
 import { createContentTypeRegistry } from '../../src/domain/content/registry';
 import { fields } from '../../src/domain/content/fields';
 import { MediaInUseError } from '../../src/domain/media/errors';

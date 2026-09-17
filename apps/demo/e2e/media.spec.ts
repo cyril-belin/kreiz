@@ -1,4 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
+import { utimesSync } from 'node:fs';
+import { join } from 'node:path';
 import Sharp from 'sharp';
 import { query } from './db';
 
@@ -12,6 +14,34 @@ import { query } from './db';
  * l'UI sont nettoyées par le global-teardown.
  */
 
+/**
+ * Note dev server (même workaround documenté que seo.spec, requis depuis le
+ * spec global slice 10 qui réchauffe `/articles/[slug]` avant ce fichier) :
+ * Astro mémoïse `getStaticPaths` par route — une page publiée après le
+ * réchauffement renverrait 404 en dev (comportement dev uniquement ; en
+ * production le build recalcule tout). On invalide le module de route
+ * (touch) avant la visite publique.
+ */
+function refreshPublicRoutes(): void {
+  const now = new Date();
+  utimesSync(join(process.cwd(), 'src/pages/articles/[slug].astro'), now, now);
+}
+
+async function gotoPublicArticle(page: Page, path: string): Promise<void> {
+  refreshPublicRoutes();
+  await page.waitForTimeout(1500);
+  let response = await page.goto(path);
+  if (response?.status() === 404) {
+    await page.waitForTimeout(2500);
+    refreshPublicRoutes();
+    await page.waitForTimeout(1500);
+    response = await page.goto(path);
+  }
+  if (response?.status() !== 200) {
+    throw new Error(`Page publique ${path} attendue en 200, reçu ${response?.status() ?? 0}`);
+  }
+}
+
 const publicBaseUrl = process.env.E2E_STORAGE_PUBLIC_BASE_URL ?? '';
 const adminEmail = process.env.E2E_ADMIN_EMAIL as string;
 const adminPassword = process.env.E2E_ADMIN_PASSWORD as string;
@@ -20,7 +50,6 @@ const runId = Math.random().toString(36).slice(2, 8);
 /** État partagé entre tests — fichier temporaire (un redémarrage de worker
  * Playwright réimporte le module : l'état module seul n'est pas fiable). */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 const STATE_FILE = join(import.meta.dirname, '.media-state.json');
 type MediaState = { coverAId: string; coverBId: string; articleId: string };
@@ -218,8 +247,6 @@ test.describe('back-office — médias (slice 5)', () => {
     await setAlt(page, page.locator('.kz-media-card', { has: page.locator(`#alt-${emptyRows[1]!.id}`) }), altB);
     expect(await mediaIdByAlt(altA)).toBe(emptyRows[0]!.id);
     expect(await mediaIdByAlt(altB)).toBe(emptyRows[1]!.id);
-    console.log('[DIAG] emptyRows:', JSON.stringify(emptyRows));
-    console.log('[DIAG] all media:', JSON.stringify(await query<{ id: string; alt_text: string; status: string }>('select id, alt_text, status from kreiz_media order by created_at')));
 
     // Création d'un Article avec la couverture A.
     await page.goto('/admin/content/article/new');
@@ -272,7 +299,7 @@ test.describe('back-office — médias (slice 5)', () => {
     });
 
     // Page publique (premier rendu) : couverture A.
-    await page.goto(`/articles/article-media-${runId}`);
+    await gotoPublicArticle(page, `/articles/article-media-${runId}`);
     await expect(page.locator('[data-kreiz-cover] img')).toHaveAttribute(
       'src',
       new RegExp(`media/${state.coverAId}/400\\.webp`),

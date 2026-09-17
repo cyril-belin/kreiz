@@ -1,6 +1,13 @@
 # Kreiz — Astro Editorial Core
 
-**Document de cadrage** · Version 1.1 · 2026-09-05 · Statut : **Validé** — ajustements 1 à 4 intégrés
+**Document de cadrage** · Version 1.2 · 2026-09-17 · Statut : **Validé** — ajustements 1 à 4 intégrés ;
+v1.2 : alignements factuels sur la V1 réellement livrée (slice 10), sans changement de vision.
+
+> Note v1.2 : ce document reste le cadrage historique. Les affirmations décrivant
+> l'état V1 courant ont été rectifiées après implémentation (format rich text,
+> vocabulaire analytics et rétention, adaptateurs livrés, périmètre médias,
+> interactivité admin) ; l'historique des décisions est conservé. La référence
+> courante est [`architecture.md`](architecture.md).
 
 Ce document fige la vision, le périmètre, l'architecture et les décisions de la V1 de Kreiz.
 Aucune implémentation ne commence avant validation explicite de ce cadrage.
@@ -34,8 +41,8 @@ package versionné, sans que l'infrastructure de publication soit construite en 
    contenu concrets, les templates, le wording et les champs métiers appartiennent au projet.
 4. **Types de contenu déclarés en code.** Rien n'est créable ni configurable depuis l'UI de
    l'admin. L'admin génère ses formulaires à partir des déclarations, il ne les édite pas.
-5. **Plateformes derrière des ports.** Vercel, R2/S3, Resend, Neon sont des adapters. Aucune
-   API plateforme n'apparaît dans le domaine (média, contenu, publication).
+5. **Plateformes derrière des ports.** Vercel, R2/S3, le relais email, Neon sont des adapters.
+   Aucune API plateforme n'apparaît dans le domaine (média, contenu, publication).
 6. **Simplicité d'abord.** Toute abstraction répond à un besoin réel démontré. Pas de port,
    pas de colonne, pas de module spéculatif — mais rien de ce qui est construit ne doit fermer
    une évolution prévisible.
@@ -50,7 +57,9 @@ package versionné, sans que l'infrastructure de publication soit construite en 
 
 ## 3. Périmètre V1
 
-- Architecture Astro propre (monorepo pnpm, TypeScript strict, Tailwind, Vue islands ciblées).
+- Architecture Astro propre (monorepo pnpm, TypeScript strict, Tailwind). Pas de framework
+  d'islands en V1 : l'interactivité admin est du JavaScript progressif léger, le public en a
+  le moins possible.
 - Connexion Neon + définitions de schéma Drizzle du Core ; migrations appartenant aux apps.
 - Authentification admin (email + mot de passe argon2id, sessions révocables en base, guards).
 - CLI `kreiz` : création du premier admin, reset mot de passe.
@@ -59,12 +68,14 @@ package versionné, sans que l'infrastructure de publication soit construite en 
   dashboard analytics, page d'aperçu.
 - Moteur de contenu générique : `content_entries` + déclarations de types en code,
   brouillon/publication, slugs avec namespaces de route, redirections automatiques normalisées.
-- Rich text : éditeur Tiptap (island Vue), HTML sanitisé serveur comme format canonique.
+- Rich text : document canonique `KreizRichTextDocument` (JSON versionné) ; Tiptap est
+  l'adaptateur d'édition côté admin ; le HTML public est la sortie déterministe du renderer
+  du Core — jamais du HTML stocké.
 - Médias : upload direct présigné vers stockage objet S3-compatible, cycle de vie explicite,
   variantes d'images générées de façon asynchrone derrière un port.
 - Formulaire de contact public déclaré en code, anti-spam multi-couches, port `Mailer` optionnel.
-- Analytics internes : 3 événements, session anonyme éphémère, rétention configurable,
-  dashboard minimal.
+- Analytics internes : 4 événements (2 client, 2 serveur), session anonyme éphémère,
+  rétention configurable, dashboard minimal.
 - SEO : meta par contenu, sitemap, robots, JSON-LD, images sociales sélectionnables.
 - Pages 404/500 (défauts du Core, personnalisables par projet).
 - Tests (unitaires, intégration sur branche Neon, E2E Playwright) et CI à niveaux.
@@ -122,13 +133,13 @@ plomberie d'admin : il déclare ses types de contenu, ses formulaires et ses tem
 
 | Couche (`packages/core/src`) | Responsabilité | Interdits |
 |---|---|---|
-| `domain` | Types, règles pures : slugs, namespaces, redirections, états éditoriaux et médias, schémas de validation, helpers SEO | Aucune I/O, aucun import Drizzle/Astro |
+| `domain` | Types, règles pures : slugs, namespaces, redirections, états éditoriaux et médias, schémas de validation, helpers SEO | Aucune I/O, aucun import Drizzle/Astro (exception documentée : quelques signatures exposent des types de lignes Drizzle — dette #12 de `technical-debt.md`) |
 | `data` | `defineCoreTables()` (définitions Drizzle) + **repositories** par domaine — seule couche qui parle à Neon/Drizzle | Logique métier au-delà du mapping |
 | `services` | Orchestration : publication, médias, formulaires, analytics, audit, rate limiting | Connaître une plateforme |
 | `http` | Helpers de routes, guards de session, CSRF, endpoints réutilisables, intégration Astro (`injectRoute`) | Requêtes DB hors repositories |
-| `admin` | Shell d'admin, composants génériques, islands Vue (Tiptap, media picker, contrôles) | Style de site public |
+| `admin` | Shell d'admin, composants génériques Astro progressifs (éditeur Tiptap chargé par script, media picker, contrôles — pas d'islands Vue en V1) | Style de site public |
 | `ports` | Contrats : `ObjectStorage`, `ImageTransformer`, `BackgroundJobs`, `RebuildTrigger`, `Mailer` | Implémentation |
-| `adapters` | Vercel (rebuild, jobs via `waitUntil`), S3/R2, Resend (exemple), sharp | Être importés par `domain`/`services` directement |
+| `adapters` | Vercel (rebuild via deploy hook, jobs via `waitUntil`), S3-compatible (SigV4 maison, pas de SDK), relais email webhook, sharp | Être importés par `domain`/`services` directement |
 | `cli` | Bin `kreiz` : `admin:create`, `admin:reset-password` | — |
 
 Les dépendances pointent toujours vers le domaine. L'application compose : sa configuration,
@@ -162,8 +173,11 @@ qu'un changement exige une vraie migration) :
 - **`kreiz_content_entries`** — `id`, `content_type` (clé de déclaration), `route_namespace`,
   `title`, `slug`, `cover_media_id` FK nullable, `status` (`draft | published`),
   `published_at`, `seo` jsonb (`title`, `description`, `canonical_override`,
-  `og_image_media_id`), `data` jsonb (validé par le schéma du type déclaré),
-  `created_by` / `updated_by` FK, `created_at`, `updated_at`, `deleted_at` (soft delete).
+  `og_image_media_id`, `og_title`, `og_description`, `noindex`, `nofollow`), `data` jsonb
+  (validé par le schéma du type déclaré), `created_by` / `updated_by` FK, `created_at`,
+  `updated_at`, `deleted_at` (soft delete) — et les **colonnes `published_*`** :
+  `published_title/slug/data/seo/cover_media_id` forment le snapshot public figé par
+  Publish, seule projection lue par le build (Save ≠ Publish structurel).
   Index : `UNIQUE(route_namespace, slug)` partiel (`WHERE deleted_at IS NULL`) ;
   `(content_type, status, published_at DESC)` ; `(route_namespace, published_at DESC)`.
 - **`kreiz_redirects`** — `id`, `from_path` (unique, normalisé), `to_path`, `content_entry_id`
@@ -172,18 +186,24 @@ qu'un changement exige une vraie migration) :
 - **`kreiz_media`** — `id`, `status` (`uploading | processing | ready | failed`), `failure_reason`
   nullable, `storage_key` (original), `mime`, `size_bytes`, `width`, `height`, `alt_text`,
   `variants` jsonb (`[{ key, width, format, size_bytes }]`), `uploaded_by` FK, `created_at`,
-  `updated_at`, `deleted_at`. Les templates ne référencent que des médias `ready`. L'original
-  est conservé selon la politique du projet et n'est jamais considéré comme variante publique
-  optimisée.
+  `updated_at`, `deleted_at` (garde de lecture — la suppression V1 est **physique**,
+  refusée tant que le média est référencé par une couverture ou un corps riche, objets
+  effacés au mieux). Les templates ne référencent que des médias `ready`. L'original
+  reste privé et n'est jamais une variante publique optimisée.
 - **`kreiz_contact_requests`** — `id`, `form_id` (clé du formulaire déclaré), `payload` jsonb (validé
-  par le schéma du formulaire), `status` (`new | handled`), `created_at`. Pas d'IP complète,
-  pas d'UA brut.
-- **`kreiz_analytics_events`** — `id`, `event_name` (`page_view | cta_click |
-  contact_form_submitted`), `path`, `referrer`, `session_id` (anonyme, éphémère),
-  `content_type` / `content_entry_id` nullables, `device_class` nullable
-  (`mobile | tablet | desktop`), `country` nullable (enrichissement plateforme **optionnel**,
-  jamais requis par le modèle), `metadata` jsonb minimal, `created_at`. Index sur
-  `(event_name, created_at)` et `created_at`. Rétention configurable (défaut 12 mois) + purge.
+  par le schéma du formulaire), `status` (`new | handled`), `created_at` — plus l'état de
+  notification livré en V1 : `notification_status` (`not_configured | pending | sent | failed`),
+  `notification_attempts` (max 5, backoff), `notification_failure` jsonb, `notified_at`,
+  `notification_next_attempt_at`, et `dedup_key` (idempotence serveur, index unique partiel).
+  Pas d'IP complète, pas d'UA brut.
+- **`kreiz_analytics_events`** — `id`, `event_name` (`page_view | cta_click | form_accepted |
+  form_notification_sent` — les deux derniers émis serveur, jamais acceptés du client),
+  `path` (sans query string), `referrer` (réduit au domaine), `referrer_kind`, `locale`,
+  5 UTM whitelistés, `session_id` (anonyme, éphémère, nullable), `content_entry_id` nullable,
+  `device_class` nullable (`mobile | tablet | desktop`), `country` nullable (enrichissement
+  plateforme **optionnel**, non rempli en V1), `dedup_key` (déduplication par tranche 30 s,
+  index unique partiel), `created_at`. Index sur `(event_name, created_at)` et `created_at`.
+  Rétention configurable (défaut 90 jours, bornes 7–365) + purge.
 - **`kreiz_rate_limits`** — `key`, `window_started_at`, `count`. Incréments atomiques (upsert
   concurrent-safe), purge opportuniste.
 
@@ -197,8 +217,8 @@ Un type de contenu est **déclaré en code** par le projet :
 
 - `key` (ex. `article`), `label`, `routeNamespace` (ex. `articles` → `/articles/[slug]`) ;
 - `dataSchema` : schéma strict (Zod) du JSONB, avec un **vocabulaire de champs borné** :
-  texte court, texte long, rich text (HTML sanitisé), image (référence média, alt requis),
-  select, liste, métrique, URL, date ;
+  texte court, texte long, rich text (document canonique Kreiz versionné), image
+  (référence média, alt requis), select, liste, métrique, URL, date ;
 - options de listing admin et mapping vers le template du projet.
 
 Le Core fournit : CRUD générique, formulaires d'édition générés depuis la déclaration,
@@ -256,8 +276,9 @@ Admin : demande d'URL d'upload (validation mime + taille)
   l'adapter**, jamais dans le domaine média.
 - `ImageTransformer` V1 : sharp (3-4 largeurs + AVIF/WebP). Remplaçable (service d'image,
   traitement au build) sans toucher aux repositories ni au domaine.
-- V1 : les **images** suivent le pipeline complet ; les autres types (PDF, vidéo…) sont stockés
-  et servis tels quels, sans variantes.
+- V1 : seules les **images** sont acceptées (JPEG, PNG, WebP, AVIF — ≤ 20 Mo, 30 Mpx) et
+  suivent le pipeline complet ; tout autre type (SVG, PDF, vidéo…) est refusé avant toute
+  présignature. Les types non-image seront un ajout explicite ultérieur.
 - Alt text requis pour insérer un média dans un contenu (accessibilité).
 - CORS du bucket configuré pour l'upload direct ; le média est servi depuis le domaine de
   stockage/CDN, jamais depuis le domaine principal.
@@ -280,21 +301,25 @@ Admin : demande d'URL d'upload (validation mime + taille)
 
 - V1 : **une capacité contact**, déclarée en code (`form_id`, schéma des champs, page de
   remerciement). Pas de form builder.
-- Anti-spam en couches : honeypot, temps minimum de remplissage, rate limiting, Turnstile
-  optionnel ; validation d'`Origin` sur les POST publics.
+- Anti-spam en couches : jeton d'émission signé HMAC, honeypot, temps minimum de remplissage,
+  rate limiting PostgreSQL ; validation d'`Origin` sur les POST publics. (Turnstile : non
+  livré en V1, ajout futur explicite.)
 - Vie privée : **pas d'IP complète persistée** ; le rate limiting peut utiliser un hash d'IP à
   finalité anti-abus et à rétention courte ; l'UA brut n'est jamais stocké.
 - `Mailer` : port minimal. **Aucun fournisseur obligatoire** — sans Mailer configuré, le
   formulaire fonctionne, la demande est stockée et visible dans l'admin, sans erreur
-  fonctionnelle. Resend existe comme adapter d'exemple ; SMTP ou autres suivront
-  indépendamment. L'échec d'envoi d'email est journalisé, jamais visible de l'expéditeur.
+  fonctionnelle. L'adapter de référence livré est un **relais webhook** (POST JSON du
+  message préparé : from/to/replyTo/subject/text) ; SMTP ou fournisseurs suivront
+  indépendamment. L'échec d'envoi est persisté avec retry/backoff et relance admin,
+  jamais visible de l'expéditeur.
 
 ## 14. Analytics internes
 
 - Collecte : beacon (`sendBeacon`/`fetch keepalive`) vers un endpoint contrôlé, sans cookie —
   pas de bandeau de consentement nécessaire.
-- Événements V1 : `page_view`, `cta_click`, `contact_form_submitted`. Repoussés : scroll depth,
-  form_started, heatmaps, parcours, fingerprinting, attribution.
+- Événements V1 : `page_view`, `cta_click` (client, beacon) et `form_accepted`,
+  `form_notification_sent` (serveur, conversions — sans aucune donnée du formulaire).
+  Repoussés : scroll depth, form_started, heatmaps, parcours, fingerprinting, attribution.
 - Session approximative : identifiant aléatoire éphémère en `sessionStorage`, sans donnée
   personnelle, usage analytics internes uniquement.
 - Modèle : voir §7 ; géolocalisation et headers plateforme = enrichissements optionnels hors
@@ -341,7 +366,8 @@ Admin : demande d'URL d'upload (validation mime + taille)
 ## 17. Tests
 
 - **Unitaires (Vitest)** — fonctions déterministes uniquement : slug, route namespace,
-  validation des schémas de contenu, sanitizer, résolveur/normalisation de redirections,
+  validation des schémas de contenu, parseur/renderer du document rich text,
+  résolveur/normalisation de redirections,
   guards purs, helpers SEO, fonctions analytics. Pas de couverture artificielle.
 - **Intégration — Neon réel** : en CI, branche Neon temporaire : `créer → migrer → tester →
   détruire`. Vérifie le vrai driver et les vraies migrations.
@@ -364,11 +390,11 @@ kreiz/
 │           ├── data/          # defineCoreTables + repositories
 │           ├── services/      # publication, médias, formulaires, analytics, audit
 │           ├── http/          # guards, CSRF, endpoints, intégration Astro (injectRoute)
-│           ├── admin/         # shell admin, composants, islands Vue (Tiptap, picker)
+│           ├── admin/         # shell admin, composants Astro progressifs (Tiptap, picker)
 │           ├── seo/
 │           ├── ports/         # ObjectStorage, ImageTransformer, BackgroundJobs,
 │           │                  # RebuildTrigger, Mailer
-│           ├── adapters/      # vercel, s3/r2, resend (exemple), sharp
+│           ├── adapters/      # vercel (rebuild/jobs), s3-compatible, mail webhook, sharp
 │           └── cli/           # bin kreiz (admin:create, admin:reset-password)
 ├── apps/
 │   └── demo/                  # application de référence — consommateur EXTERNE du Core
@@ -396,7 +422,7 @@ typecheck/build.
 | Définitions de tables, repositories, guards, CSRF | Déclarations de types de contenu et de formulaires |
 | Shell et composants génériques d'admin | Templates publics, wording, CTA |
 | Ports + adapters de référence | Choix et configuration des adapters (bucket, rebuild, mailer) |
-| Formulaires (capacité), analytics (3 événements), SEO (plomberie) | Tables satellites et types métiers |
+| Formulaires (capacité), analytics (4 événements), SEO (plomberie) | Tables satellites et types métiers |
 | 404/500 par défaut, sitemap, robots | 404/500 personnalisés, contenu réel |
 
 **Règle absolue** : le projet n'importe que l'API publique de `@kreiz/core`. Le demo est la
@@ -425,8 +451,9 @@ pas encoder des hypothèses fausses.
    les apps possèdent leurs migrations ; repositories comme unique frontière Drizzle.
 7. Auth : argon2id, sessions DB révocables, cookie durci, rate limit, CLI `admin:create` /
    `admin:reset-password`, 14 j glissants + limite absolue ; pas de TOTP stocké.
-8. Rich text : Tiptap en island, HTML sanitisé serveur = format canonique, éditeur remplaçable
-   sans migration de contenu.
+8. Rich text : `KreizRichTextDocument` JSON versionné = format canonique ; Tiptap n'est que
+   l'adaptateur d'édition ; le HTML public est la sortie déterministe du renderer du Core.
+   Éditeur remplaçable sans migration de contenu (le format est versionné).
 9. Médias : upload direct présigné V1, vérification serveur de l'objet, états
    `uploading/processing/ready/failed`, transformation asynchrone (sharp) via ports,
    retry admin + cron de rattrapage.
@@ -434,10 +461,12 @@ pas encoder des hypothèses fausses.
 11. Redirections automatiques à changement de slug publié, normalisation des chaînes et
     boucles à l'écriture, matérialisation au build via port d'émission.
 12. Preview SSR authentifiée réutilisant exactement les templates publics.
-13. Contact déclaré en code ; honeypot + minimum-time + rate limit + Turnstile optionnel ;
-    pas d'IP complète ; `Mailer` optionnel (Resend = adapter d'exemple).
-14. Analytics : 3 événements, session anonyme `sessionStorage`, rétention configurable,
-    dashboard minimal, enrichissements plateforme optionnels.
+13. Contact déclaré en code ; jeton signé + honeypot + minimum-time + rate limit (Turnstile
+    non livré en V1) ; pas d'IP complète ; `Mailer` optionnel (adapter de référence : relais
+    webhook).
+14. Analytics : 4 événements (2 client, 2 serveur), session anonyme `sessionStorage`,
+    rétention configurable (défaut 90 j), dashboard minimal, enrichissements plateforme
+    optionnels.
 15. SEO complet au build (meta, sitemap, robots, JSON-LD) ; drafts/deleted/admin exclus.
 16. Sécurité : CSP validée en implémentation, CSRF session-bound, rate limit PG atomique,
     audit log append-only, sobriété des données.
@@ -462,7 +491,7 @@ pas encoder des hypothèses fausses.
 | Redis / ports de rate limiting externes | PostgreSQL suffit au volume visé |
 | Form builder, multilingue, moteur de thèmes, plugins, multi-tenant | Contraires aux principes (voir §4) |
 | Tables satellites génériques | Construites par projet quand une règle de promotion l'exige |
-| Médias vidéo avec pipeline | V1 : stockés/servis tels quels |
+| Médias non-image (PDF, vidéo…) avec pipeline | V1 : refusés à l'upload — images seules (JPEG/PNG/WebP/AVIF) |
 
 ## 23. Défauts de travail validés
 
@@ -471,12 +500,14 @@ c'est pertinent :
 
 1. **Zod** pour la validation (schémas de contenu, formulaires, analytics, env).
 2. **Node 24 LTS, Astro 7 (version stable courante à l'initialisation du repo), Tailwind 4.3,
-   Vue 3, TypeScript strict** — la documentation référence la major supportée ; les versions
-   exactes sont verrouillées dans le lockfile au slice 0.
+   TypeScript strict** — pas d'islands Vue en V1 (interactivité admin en JavaScript
+   progressif). La documentation référence la major supportée ; les versions exactes sont
+   verrouillées dans le lockfile au slice 0.
 3. **Préfixe `kreiz_`** sur les tables du Core, **non configurable en V1** — le nom des tables
    appartient au schéma et aux migrations de l'application ; un besoin réel de namespace
    configurable sera traité explicitement le moment venu.
-4. Limite absolue de session : **90 jours**. Rétention analytics par défaut : **12 mois**.
+4. Limite absolue de session : **90 jours**. Rétention analytics par défaut : **90 jours**
+   (bornes 7–365).
 5. Rate limits par défaut : login 5 échecs / 15 min ; formulaires ~5 / 10 min / hash d'IP.
 6. Tailles upload : images ≤ 20 Mo ; variantes générées ≈ 400/800/1400/2000 px, AVIF + WebP.
 
@@ -493,7 +524,7 @@ c'est pertinent :
 | Redirections multi-plateformes | Formats divergents (vercel.json, _redirects…) | Un seul adapter V1 ; port d'émission ; tests du résolveur pur |
 | Rebuilds fréquents | Coût/latence si éditions très fréquentes | Coalescence plateforme ; acceptable pour le profil éditorial visé |
 | Approximation analytics | Perte de beacons en fin de session | `sendBeacon`/`keepalive` ; hypothèse d'approximation assumée |
-| Tiptap | Extensions pro payantes | Rester sur le cœur MIT ; le format canonique (HTML) rend l'éditeur remplaçable |
+| Tiptap | Extensions pro payantes | Rester sur le cœur MIT ; le format canonique (document JSON versionné) rend l'éditeur remplaçable |
 
 ## 25. Ordre de construction recommandé
 
@@ -518,13 +549,17 @@ Slices verticales — chaque slice se termine par un demo qui n'utilise que l'AP
    actions + exclusion drafts/deleted du build.
 5. Médias : `ObjectStorage` (R2), upload présigné, cycle de vie, `ImageTransformer` (sharp),
    `BackgroundJobs` (`waitUntil` + cron), media picker.
-6. Rich text : island Tiptap + sanitizer allowlist + intégration dans l'éditeur de contenu.
-7. Formulaires publics : contact, anti-spam, boîte admin, adapter Resend optionnel.
+6. Rich text : Tiptap + format canonique + intégration dans l'éditeur de contenu
+   (livré : adaptateur Tiptap et document JSON versionné, sans sanitizer HTML).
+7. Formulaires publics : contact, anti-spam, boîte admin, adapter mail optionnel
+   (livré : relais webhook).
 8. Analytics : collecte, purge, dashboard.
 9. SEO & durcissement : sitemap, robots, JSON-LD, 404/500, en-têtes, CSP finale.
 10. Tests E2E complets, documentation handoff, revue de la frontière Core/Project.
 
 ## 26. Prochaine étape
 
-Cadrage validé (v1.1) — **slice 0 en cours** : squelette du monorepo, tooling, CI et spike
-de l'intégration Astro.
+Cadrage validé (v1.1). **V1 livrée** : slices 0 à 10 terminées et vérifiées (fondations,
+données, auth, contenu, publication, médias, rich text, formulaires, analytics, SEO,
+intégration finale). Prochaine étape : **revue sécurité/adversariale finale du Core
+complet** — voir `handoff.md`.

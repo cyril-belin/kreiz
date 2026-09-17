@@ -1,18 +1,10 @@
 import type { KreizAdminUser } from '../data/tables/admin-users.js';
 import type { KreizAdminSession as SessionRow } from '../data/tables/admin-sessions.js';
 import type { KreizDatabase } from '../data/connection.js';
-import {
-  createAdminAuditLogRepository,
-  createAdminSessionsRepository,
-  createAdminUsersRepository,
-  createRateLimitsRepository,
-} from '../data/index.js';
-import type {
-  AdminAuditLogRepository,
-  AdminSessionsRepository,
-  AdminUsersRepository,
-  RateLimitsRepository,
-} from '../data/index.js';
+import { createAdminAuditLogRepository, type AdminAuditLogRepository } from '../data/repositories/admin-audit-log.js';
+import { createAdminSessionsRepository, type AdminSessionsRepository } from '../data/repositories/admin-sessions.js';
+import { createAdminUsersRepository, type AdminUsersRepository } from '../data/repositories/admin-users.js';
+import { createRateLimitsRepository, type RateLimitsRepository } from '../data/repositories/rate-limits.js';
 import {
   LOGIN_RATE_LIMIT_MAX,
   LOGIN_RATE_LIMIT_WINDOW_MS,

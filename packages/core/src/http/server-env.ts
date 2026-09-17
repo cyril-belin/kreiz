@@ -2,11 +2,8 @@ import { z } from 'zod';
 import { createS3ObjectStorage, S3ObjectStorage } from '../adapters/storage/s3.js';
 import { createWebhookMailer } from '../adapters/mailer/webhook.js';
 import type { MailAddress, Mailer } from '../ports/mailer.js';
-import {
-  createKreizDatabase,
-  kreizDatabaseEnvSchema,
-  type KreizDatabase,
-} from '../data/index.js';
+import { createKreizDatabase, type KreizDatabase } from '../data/connection.js';
+import { kreizDatabaseEnvSchema } from '../data/env.js';
 import { createAdminAuthServiceForDatabase, type AdminAuthService } from '../services/admin-auth.js';
 import { createNoopRebuildTrigger, type RebuildTrigger } from '../ports/rebuild.js';
 import { createVercelDeployHookTrigger } from '../adapters/vercel/rebuild.js';

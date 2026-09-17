@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
@@ -62,12 +62,25 @@ function buildExtensions() {
   ];
 }
 
+const createdEditors: Editor[] = [];
+
 function createEditor(content: string | Record<string, unknown> = '<p></p>'): Editor {
-  return new Editor({
+  const editor = new Editor({
     extensions: buildExtensions(),
     content: content as never,
   });
+  createdEditors.push(editor);
+  return editor;
 }
+
+// Sans destroy(), le DOMObserver de ProseMirror garde un timer actif après
+// le teardown jsdom : son flush lève « document is not defined » en erreur
+// non gérée et fait échouer la suite complète (vitest exit 1).
+afterEach(() => {
+  for (const editor of createdEditors.splice(0)) {
+    editor.destroy();
+  }
+});
 
 /** Sortie réelle de l'îlot : traduction puis validation serveur. */
 function canonicalDocument(editor: Editor) {
