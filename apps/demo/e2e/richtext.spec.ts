@@ -67,7 +67,7 @@ test.describe('back-office — éditeur riche (slice 6)', () => {
   }) => {
     await login(page);
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article riche ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(`Article riche ${runId}`);
     await page.getByLabel('Accroche').fill('Accroche riche.');
     await page.getByLabel('Auteur').fill('Auteure Riche');
 
@@ -124,7 +124,7 @@ test.describe('back-office — éditeur riche (slice 6)', () => {
     await login(page);
     const slug = `article-sp-corps-${runId}`;
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article save/publish corps ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(`Article save/publish corps ${runId}`);
     await page.getByLabel('Slug').fill(slug);
     await page.getByLabel('Accroche').fill('Accroche save/publish.');
     await page.getByLabel('Corps').fill('Corps version A.');
@@ -180,7 +180,7 @@ test.describe('back-office — éditeur riche (slice 6)', () => {
     await uploadReadyMedia(page, alt);
 
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article média corps ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(`Article média corps ${runId}`);
     await page.getByLabel('Accroche').fill('Accroche média.');
     await page.getByLabel('Auteur').fill('Auteure Média');
     await page.getByLabel('Corps').click();
@@ -280,7 +280,7 @@ test.describe('back-office — éditeur riche (slice 6)', () => {
   }) => {
     await login(page);
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article liens ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(`Article liens ${runId}`);
     await page.getByLabel('Accroche').fill('Accroche liens.');
     await page.getByLabel('Corps').click();
     await page.keyboard.type('Voir la documentation externe.');
@@ -325,7 +325,7 @@ test.describe('back-office — éditeur riche (slice 6)', () => {
   }) => {
     await login(page);
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article collage ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(`Article collage ${runId}`);
     await page.getByLabel('Accroche').fill('Accroche collage.');
     await page.getByLabel('Corps').click();
 

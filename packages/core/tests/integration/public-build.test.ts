@@ -396,16 +396,22 @@ describeIntegration('chemin public build-time — published → build Astro → 
     expect(JSON.stringify(richRow[0])).not.toContain('"target"');
     expect(JSON.stringify(richRow[0])).not.toContain('"rel"');
 
-    // — 1quater. Garde de frontière de bundle (slice 6 §29, ajustée slice 8) :
-    //            la page publique n'embarque **aucun** script de bundle (le
-    //            runtime Tiptap/ProseMirror n'existe que dans le bundle
-    //            admin) — le seul `<script>` autorisé est le beacon analytics
-    //            du Core : un tag externe auto-hébergé (`defer`), aucune
-    //            logique inline dans la page.
+    // — 1quater. Garde de frontière de bundle (slice 6 §29, ajustée slice 8,
+    //            slice 9) : la page publique n'embarque **aucun** script de
+    //            bundle (le runtime Tiptap/ProseMirror n'existe que dans le
+    //            bundle admin) — les seuls `<script>` autorisés sont le
+    //            beacon analytics du Core (tag externe auto-hébergé,
+    //            `defer`, aucune logique inline) et les **données**
+    //            JSON-LD (`type="application/ld+json"` : pas de code
+    //            exécutable, sérialisation sûre du domaine SEO).
+    const withoutKnownScripts = (htmlPage: string): string =>
+      htmlPage
+        .replace(BEACON_TAG, '')
+        .replaceAll(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '');
     expect(richHtml.toLowerCase()).not.toContain('tiptap');
     expect(richHtml.toLowerCase()).not.toContain('prosemirror');
-    expect(richHtml.replace(BEACON_TAG, '')).not.toContain('<script');
-    expect(html.replace(BEACON_TAG, '')).not.toContain('<script');
+    expect(withoutKnownScripts(richHtml)).not.toContain('<script');
+    expect(withoutKnownScripts(html)).not.toContain('<script');
     expect(richHtml).toContain(BEACON_TAG);
 
     // — 2. Slug dérivé : page à l'adresse publique figée, PAS au slug courant ;

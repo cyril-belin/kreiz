@@ -23,6 +23,8 @@ import {
 } from '../domain/content/redirect-engine.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
 import { resolvePublicMediaView } from '../domain/media/view-model.js';
+import type { SeoSiteConfig } from '../domain/seo/site-config.js';
+import { validateContentSeoFields } from '../domain/seo/validate.js';
 import { loadRichTextMediaMap, validateRichTextMediaForPublish } from '../content/rich-text-media.js';
 import {
   contentFieldErrorMessage,
@@ -78,6 +80,12 @@ export type PublicationServiceDeps = {
   registry: ContentTypeRegistry;
   /** Base publique des variantes média — résolution de la vue de couverture publiée. */
   mediaPublicBaseUrl: string | null;
+  /**
+   * Configuration SEO du site (slice 9) — base fiable pour la vérification
+   * d'origine des overrides canoniques au Publish. `null` = aucun SEO de
+   * site : un override canonique absolu bloque la publication.
+   */
+  seoSite?: SeoSiteConfig | null;
 };
 
 export type PublishContentInput = { entryId: string; actorAdminId: string };
@@ -106,6 +114,50 @@ export function createPublicationService(deps: PublicationServiceDeps) {
 
   function requireDeclaration(contentType: string): ResolvedContentTypeDeclaration {
     return registry.requireByKey(contentType);
+  }
+
+  /**
+   * Validation SEO de **publication** (slice 9) — revalidation stricte du
+   * JSONB (le schéma du Save fait foi ; une divergence est une corruption
+   * refusée), image OG **`ready`** et servable (un contenu publié ne
+   * référence jamais un média en traitement, mission §12), override
+   * canonique absolu **même origine** que la base fiable du Project.
+   */
+  async function validateSeoForPublish(seo: unknown, errors: ContentFieldErrors): Promise<void> {
+    const validated = validateContentSeoFields(seo, errors);
+    if (validated === null) return;
+    if (validated.ogImageMediaId) {
+      const mediaRow = await media.findById(validated.ogImageMediaId);
+      if (!mediaRow || mediaRow.deletedAt) {
+        errors.seo_og_image =
+          "L'image Open Graph sélectionnée n'existe plus — retirez-la ou choisissez-en une autre avant de publier.";
+      } else if (mediaRow.status !== 'ready') {
+        errors.seo_og_image =
+          "L'image Open Graph doit être un média prêt (ready) pour publier — réessayez une fois le traitement terminé.";
+      } else if (!deps.mediaPublicBaseUrl) {
+        errors.seo_og_image =
+          "Le stockage média public n'est pas configuré (KREIZ_STORAGE_PUBLIC_BASE_URL) — publication avec image Open Graph impossible.";
+      }
+    }
+    const canonicalOverride = validated.canonicalOverride;
+    if (canonicalOverride && !canonicalOverride.startsWith('/')) {
+      const seoSite = deps.seoSite ?? null;
+      let sameOrigin = false;
+      if (seoSite) {
+        try {
+          const url = new URL(canonicalOverride);
+          sameOrigin =
+            (url.protocol === 'https:' || url.protocol === 'http:') &&
+            url.origin === new URL(seoSite.siteUrl).origin;
+        } catch {
+          sameOrigin = false;
+        }
+      }
+      if (!sameOrigin) {
+        errors.seo_canonical =
+          "Le canonical absolu doit rester sur le domaine du site configuré — retirez l'override ou utilisez un chemin interne (« /… »).";
+      }
+    }
   }
 
   /**
@@ -155,6 +207,11 @@ export function createPublicationService(deps: PublicationServiceDeps) {
         data,
         errors,
       );
+      // SEO (slice 9) : revalidation stricte du JSONB (corruption = refus),
+      // image OG **`ready`** (même contrat que la couverture, mission §12)
+      // et override canonique même origine. Le snapshot `published_seo`
+      // n'est figé qu'après cette validation.
+      await validateSeoForPublish(entry.seo, errors);
       if (Object.keys(errors).length === 0) {
         return { title, data, cover };
       }

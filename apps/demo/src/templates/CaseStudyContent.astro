@@ -1,6 +1,13 @@
 ---
 import type { ContentView } from '@kreiz/core/content';
+import {
+  breadcrumbJsonLd,
+  jsonLdScriptTag,
+  resolveContentSeo,
+  seoHeadTags,
+} from '@kreiz/core/seo';
 import type { CaseStudyData } from '../content-types/case-study.js';
+import { seoSite } from '../seo.js';
 import CoverPicture from './CoverPicture.astro';
 import '../styles/global.css';
 
@@ -9,6 +16,9 @@ import '../styles/global.css';
  * preview SSR du Core et la page publique `/realisations/[slug]`. La liste
  * de métriques (`results`) est rendue en grille de chiffres clés : la
  * structure vient des données, la grille appartient au template.
+ *
+ * Slice 9 : head SEO résolue et rendue par le Core (page éditoriale sans
+ * corps rich text — la description dérivée est le champ `shortDescription`).
  */
 interface Props {
   view: ContentView<CaseStudyData>;
@@ -20,6 +30,14 @@ const categoryLabels: Record<CaseStudyData['category'], string> = {
   'e-commerce': 'E-commerce',
   application: 'Application',
 };
+const resolvedSeo = resolveContentSeo(seoSite, view, {
+  ogType: 'article',
+  description: view.data.shortDescription,
+});
+const breadcrumbLd = breadcrumbJsonLd([
+  { name: seoSite.siteName, url: `${seoSite.siteUrl}/` },
+  { name: view.title, url: resolvedSeo.canonical },
+]);
 const publishedDate = view.publishedAt
   ? view.publishedAt.toLocaleDateString('fr-FR', { dateStyle: 'long' })
   : null;
@@ -29,9 +47,8 @@ const publishedDate = view.publishedAt
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{view.seo.title ?? view.title} — Kreiz demo</title>
-    {view.seo.description && <meta name="description" content={view.seo.description} />}
-    <meta name="robots" content="noindex, nofollow" />
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
+    <Fragment set:html={jsonLdScriptTag(breadcrumbLd)} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
     <main class="mx-auto max-w-3xl px-6 py-20">

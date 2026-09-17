@@ -1,0 +1,55 @@
+---
+import { ADMIN_MEDIA_PATH } from '../../http/admin-routes.js';
+
+/**
+ * Sélecteur d'**image Open Graph** (slice 9, mission §20) — même mécanique
+ * HTML progressif que le sélecteur de couverture : un `<select>` des médias
+ * `ready` (un média en traitement ne devient jamais une carte sociale) +
+ * l'option « Aucune ». La valeur voyage en champ système `seo_og_image_media_id`
+ * (référence média stable — jamais d'URL brute), validée serveur au Save et
+ * au Publish.
+ */
+interface Props {
+  /** Médias `ready` (id + alt) — seuls sélectionnables. */
+  readyMedia: ReadonlyArray<{ id: string; alt: string }>;
+  /** Image OG courante (id éditorial) — sert l'aperçu et la valeur initiale. */
+  selectedMediaId: string | null;
+  /** Miniature de l'image courante (serveur), ou `null`. */
+  selectedThumbnailUrl: string | null;
+  /** Erreur de champ (`errors.seo_og_image`). */
+  error?: string;
+}
+
+const { readyMedia, selectedMediaId, selectedThumbnailUrl, error } = Astro.props;
+---
+
+<div class="kz-field kz-cover-field">
+  <label class="kz-label" for="kz-seo-og-image">Image Open Graph</label>
+  <p class="kz-help">
+    Partagée sur les réseaux sociaux (X, LinkedIn…). Par défaut : la couverture du contenu, sinon
+    l'image par défaut du site. Seuls les médias prêts sont proposés — gérez les images dans la{' '}
+    <a class="kz-cover-field__link" href={ADMIN_MEDIA_PATH}>médiathèque</a>.
+  </p>
+  {
+    selectedThumbnailUrl && selectedMediaId && (
+      <img
+        class="kz-cover-field__preview"
+        src={selectedThumbnailUrl}
+        alt="Aperçu de l'image Open Graph actuelle"
+        loading="lazy"
+        decoding="async"
+      />
+    )
+  }
+  <select class="kz-input" id="kz-seo-og-image" name="seo_og_image_media_id">
+    <option value="">Défaut (couverture, sinon image du site)</option>
+    {
+      readyMedia.map((media) => (
+        <option value={media.id} selected={media.id === selectedMediaId}>
+          {media.alt.length > 0 ? media.alt : `Image ${media.id.slice(0, 8)}`}
+        </option>
+      ))
+    }
+  </select>
+  {error && <p class="kz-field-error" role="alert">{error}</p>}
+</div>

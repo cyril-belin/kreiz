@@ -1,0 +1,40 @@
+---
+import '../styles/global.css';
+import { resolvePageSeo, seoHeadTags } from '@kreiz/core/seo';
+import { seoSite } from '../seo.js';
+
+/**
+ * Page 404 du projet (slice 9, mission §32) — servie pour toute adresse
+ * inconnue. Statique, **noindex** : ni canonical ni og:url — une page
+ * d'erreur n'a pas d'URL canonique.
+ */
+const resolvedSeo = resolvePageSeo(seoSite, {
+  path: '/404',
+  title: 'Page introuvable',
+  noindex: true,
+});
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
+  </head>
+  <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+    <main class="mx-auto max-w-2xl px-6 py-24">
+      <p class="text-xs font-medium uppercase tracking-widest text-neutral-400">Erreur 404</p>
+      <h1 class="mt-3 text-3xl font-semibold tracking-tight">Cette page n'existe pas (ou plus).</h1>
+      <p class="mt-4 leading-relaxed text-neutral-300">
+        L'adresse demandée ne correspond à aucune page publiée. Si un contenu a
+        changé d'adresse, l'ancienne renvoie automatiquement vers la nouvelle.
+      </p>
+      <p class="mt-6">
+        <a
+          class="inline-block rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-200"
+          href="/">Retour à l'accueil</a
+        >
+      </p>
+    </main>
+  </body>
+</html>

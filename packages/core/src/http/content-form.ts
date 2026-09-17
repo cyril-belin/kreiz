@@ -46,6 +46,13 @@ export type ParsedContentForm = {
    * `null` = aucune (« Aucune »), `string` = id de média prêt.
    */
   coverMediaId: string | null;
+  /**
+   * SEO brut saisi (slice 9) — **champ système** (jamais dans `data`) :
+   * structure avant validation ; le service valide (bornes, formats, média
+   * existant) et normalise. Les booléens partagent la sémantique checkbox
+   * (présents true/false — décocher retire).
+   */
+  seo: Record<string, unknown>;
   /** Données structurées à valider par le schéma du type (champs vides omis). */
   data: Record<string, unknown>;
   /** Valeurs brutes par champ (re-rendu fidèle). */
@@ -185,12 +192,34 @@ export function parseContentForm(
     }
   }
 
+  // Valeurs SEO brutes (slice 9) — champs système whitelistés, nommés
+  // `seo_*` : tout autre champ non déclaré reste ignoré. Le service valide
+  // (schéma strict, média existant, origine canonique) et normalise.
+  const seo: Record<string, unknown> = {};
+  const seoTitle = stringEntry(formData, 'seo_title');
+  if (seoTitle.length > 0) seo.title = seoTitle;
+  const seoDescription = stringEntry(formData, 'seo_description');
+  if (seoDescription.length > 0) seo.description = seoDescription;
+  const seoCanonical = stringEntry(formData, 'seo_canonical');
+  if (seoCanonical.length > 0) seo.canonicalOverride = seoCanonical;
+  const seoOgTitle = stringEntry(formData, 'seo_og_title');
+  if (seoOgTitle.length > 0) seo.ogTitle = seoOgTitle;
+  const seoOgDescription = stringEntry(formData, 'seo_og_description');
+  if (seoOgDescription.length > 0) seo.ogDescription = seoOgDescription;
+  const seoOgImage = stringEntry(formData, 'seo_og_image_media_id');
+  if (seoOgImage.length > 0) seo.ogImageMediaId = seoOgImage;
+  // Checkboxes : `on` quand cochées, absentes sinon — `false` explicite
+  // pour que décocher retire bien le noindex.
+  seo.noindex = formData.get('seo_noindex') === 'on';
+  seo.nofollow = formData.get('seo_nofollow') === 'on';
+
   return {
     title: stringEntry(formData, 'title'),
     slug: stringEntry(formData, 'slug'),
     // Champ système whitelisté (slice 5) — le service valide l'existence du
     // média ; tout autre champ non déclaré reste ignoré.
     coverMediaId: stringEntry(formData, 'cover_media_id') || null,
+    seo,
     data,
     values,
     errors,

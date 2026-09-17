@@ -19,13 +19,24 @@ export type KreizContentStatus = (typeof kreizContentStatuses)[number];
  * SEO d'une entrée (JSONB `seo`). Clés JSONB en camelCase : le JSONB est
  * consommé par le TS applicatif (templates, helpers SEO), pas interrogé en
  * SQL brut. `ogImageMediaId` référence un média par identifiant : référence
- * logique, pas de FK SQL possible depuis un JSONB.
+ * logique, pas de FK SQL possible depuis un JSONB (gardée par le comptage
+ * de références du repository médias, comme le rich text — slice 9).
+ *
+ * Validation et bornes : `domain/seo/content-seo.ts` (schéma strict, clés
+ * inconnues rejetées — le JSONB n'est jamais un sac arbitraire). `title`,
+ * `description`, `canonicalOverride` existent depuis le slice 3 ;
+ * `ogTitle`/`ogDescription`/`noindex`/`nofollow` complètent le slice 9 —
+ * JSONB évolutif, **aucune migration** nécessaire.
  */
 export type KreizContentSeo = {
   title?: string;
   description?: string;
   canonicalOverride?: string;
   ogImageMediaId?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  noindex?: boolean;
+  nofollow?: boolean;
 };
 
 /**

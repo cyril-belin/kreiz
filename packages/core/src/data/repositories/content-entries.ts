@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { KreizDatabase } from '../connection.js';
 import {
   contentEntries,
@@ -13,7 +13,7 @@ import {
  * Surface portée par les slices : création, lecture typée, lookup par slug
  * actif (slice 1) puis listing, édition de brouillon, soft delete et
  * vérification de collision de slug (slice 3), publication et lectures
- * orientées build public (slice 4).
+ * orientées build public (slice 4), SEO éditorial (slice 9).
  *
  * Frontière de publication : `markPublished` / `markUnpublished` sont des
  * primitives d'état — la décision (validation, redirections, audit, rebuild)
@@ -25,6 +25,12 @@ import {
  * admin passent par le service contenu, jamais par ce repository
  * directement (cadrage §6 : Drizzle confiné à data/repositories).
  */
+
+/** Format UUID des colonnes uuid — un id non conforme est « introuvable »,
+ * jamais une erreur SQL brute (22P02) remontée aux routes (même garde que
+ * le repository médias ; l'URL d'une route admin ne fait pas foi). */
+const CONTENT_ENTRY_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function createContentEntriesRepository(db: KreizDatabase) {
   return {
     async create(values: KreizContentEntryInsert): Promise<KreizContentEntry> {
@@ -37,6 +43,7 @@ export function createContentEntriesRepository(db: KreizDatabase) {
     },
 
     findById(id: string): Promise<KreizContentEntry | null> {
+      if (!CONTENT_ENTRY_ID_PATTERN.test(id)) return Promise.resolve(null);
       return db
         .select()
         .from(contentEntries)
@@ -100,6 +107,8 @@ export function createContentEntriesRepository(db: KreizDatabase) {
         data?: Record<string, unknown>;
         /** Couverture éditoriale — `null` = retirer la couverture. */
         coverMediaId?: string | null;
+        /** SEO éditorial validé (slice 9) — objet complet, jamais un merge partiel. */
+        seo?: Record<string, unknown>;
         updatedBy: string;
         updatedAt: Date;
       },
@@ -111,6 +120,7 @@ export function createContentEntriesRepository(db: KreizDatabase) {
           ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
           ...(patch.data !== undefined ? { data: patch.data } : {}),
           ...(patch.coverMediaId !== undefined ? { coverMediaId: patch.coverMediaId } : {}),
+          ...(patch.seo !== undefined ? { seo: patch.seo } : {}),
           updatedBy: patch.updatedBy,
           updatedAt: patch.updatedAt,
         })
@@ -289,6 +299,39 @@ export function createContentEntriesRepository(db: KreizDatabase) {
         )
         .then((rows) =>
           rows.flatMap((row) => (row.slug === null ? [] : [{ routeNamespace: row.routeNamespace, slug: row.slug }])),
+        );
+    },
+
+    /**
+     * Contenus publiés **indexables** pour le sitemap (slice 9) : snapshots
+     * publics uniquement, soft-deleted et noindex exclus (`published_seo
+     * ->> 'noindex'` — une page exclue de l'indexation n'appartient pas au
+     * sitemap). `lastmod` fiable = `published_at` (date de publication ;
+     * les Saves non publiés ne la touchent jamais).
+     */
+    listPublishedForSitemap(): Promise<
+      Array<{ routeNamespace: string; publishedSlug: string; publishedAt: Date | null }>
+    > {
+      return db
+        .select({
+          routeNamespace: contentEntries.routeNamespace,
+          publishedSlug: contentEntries.publishedSlug,
+          publishedAt: contentEntries.publishedAt,
+        })
+        .from(contentEntries)
+        .where(
+          and(
+            eq(contentEntries.status, 'published'),
+            isNull(contentEntries.deletedAt),
+            sql`coalesce(${contentEntries.publishedSeo} ->> 'noindex', 'false') <> 'true'`,
+          ),
+        )
+        .then((rows) =>
+          rows.flatMap((row) =>
+            row.publishedSlug === null
+              ? []
+              : [{ routeNamespace: row.routeNamespace, publishedSlug: row.publishedSlug, publishedAt: row.publishedAt }],
+          ),
         );
     },
   };

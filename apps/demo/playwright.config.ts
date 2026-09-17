@@ -50,6 +50,9 @@ export default defineConfig({
       KREIZ_MAIL_WEBHOOK_URL: MAIL_URL,
       KREIZ_MAIL_FROM_EMAIL: 'no-reply@kreiz-demo.example',
       KREIZ_MAIL_FROM_NAME: 'Kreiz demo E2E',
+      // Base canonique SEO (slice 9) : les canonicals/sitemap E2E pointent
+      // le serveur de test — la base vient toujours d'une config fiable.
+      KREIZ_SITE_URL: 'http://127.0.0.1:4321',
       ...STORAGE_ENV,
     },
   },

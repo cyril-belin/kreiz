@@ -1,4 +1,4 @@
-import { getContentRegistry } from '../content/runtime.js';
+import { getContentRegistry, getKreizSeoSiteConfig } from '../content/runtime.js';
 import { getContactFormRegistry } from '../forms/runtime.js';
 import { createAdminAuditLogRepository } from '../data/repositories/admin-audit-log.js';
 import { createAnalyticsEventsRepository } from '../data/repositories/analytics-events.js';
@@ -64,6 +64,7 @@ export function getKreizContentRuntime(): KreizContentRuntime {
     const registry = getContentRegistry();
     const forms = getContactFormRegistry();
     const mediaPublicBaseUrl = base.mediaPublicBaseUrl;
+    const seoSite = getKreizSeoSiteConfig();
     const analytics = createAnalyticsService({
       events: createAnalyticsEventsRepository(base.db),
       rateLimits,
@@ -77,6 +78,7 @@ export function getKreizContentRuntime(): KreizContentRuntime {
       registry,
       rebuild: base.rebuild,
       mediaPublicBaseUrl,
+      seoSite,
     });
     const publication = createPublicationService({
       entries,
@@ -86,6 +88,7 @@ export function getKreizContentRuntime(): KreizContentRuntime {
       registry,
       rebuild: base.rebuild,
       mediaPublicBaseUrl,
+      seoSite,
     });
     const contact = createContactService({
       requests,

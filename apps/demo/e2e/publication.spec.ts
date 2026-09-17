@@ -36,7 +36,7 @@ async function createArticleDraft(
   values: { title: string; excerpt: string; body: string; author: string; slug?: string },
 ): Promise<void> {
   await page.goto('/admin/content/article/new');
-  await page.getByRole('textbox', { name: 'Titre' }).fill(values.title);
+  await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(values.title);
   if (values.slug) await page.getByLabel('Slug').fill(values.slug);
   await page.getByLabel('Accroche').fill(values.excerpt);
   await page.getByLabel('Corps').fill(values.body);
@@ -354,7 +354,7 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
 
     // La page d'édition reste accessible : la session n'a pas été touchée.
     await page.goto(`/admin/content/article/${id}`);
-    await expect(page.getByRole('textbox', { name: 'Titre' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Titre', exact: true })).toBeVisible();
     // Rien n'a été publié.
     const rows = await query<{ status: string }>(
       'select status from kreiz_content_entries where id = $1',

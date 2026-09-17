@@ -206,17 +206,36 @@ export function createMediaRepository(db: KreizDatabase) {
     },
 
     /**
-     * Usage total d'un média — couverture (courante ou snapshot) **plus**
-     * références rich text (courantes ou snapshot). Une seule question :
+     * Nombre de contenus (y compris soft-deleted) référençant le média comme
+     * **image Open Graph** (slice 9 — finding historique `seo.og_image_media_id`
+     * corrigé) : état éditorial courant (`seo`) ou snapshot publié
+     * (`published_seo`). Référence JSONB par identifiant : accès par clé,
+     * même philosophie que le comptage rich text — pas de recherche texte naïve.
+     */
+    async countSeoOgImageReferences(mediaId: string): Promise<number> {
+      const rows = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(contentEntries)
+        .where(
+          sql`(${contentEntries.seo} ->> 'ogImageMediaId' = ${mediaId} or ${contentEntries.publishedSeo} ->> 'ogImageMediaId' = ${mediaId})`,
+        );
+      return rows.at(0)?.count ?? 0;
+    },
+
+    /**
+     * Usage total d'un média — couverture (courante ou snapshot), références
+     * rich text (courantes ou snapshot) **et** image Open Graph SEO
+     * (courante ou snapshot, slice 9). Une seule question :
      * « ce média est-il utilisé ? » — la réponse ne doit jamais dépendre de
      * l'endroit où la référence vit (slice 6 §13).
      */
     async countContentReferences(mediaId: string): Promise<number> {
-      const [cover, richText] = await Promise.all([
+      const [cover, richText, seoOgImage] = await Promise.all([
         this.countCoverReferences(mediaId),
         this.countRichTextReferences(mediaId),
+        this.countSeoOgImageReferences(mediaId),
       ]);
-      return cover + richText;
+      return cover + richText + seoOgImage;
     },
 
     /**

@@ -179,12 +179,26 @@ export function createInMemoryMediaRepository(
       return count;
     },
 
+    // Miroir du comptage SEO OG réel (slice 9) : clé `ogImageMediaId` du
+    // JSONB `seo` ou du snapshot `published_seo`, soft-deleted compris.
+    async countSeoOgImageReferences(mediaId) {
+      let count = 0;
+      for (const entry of state.entries.values()) {
+        if (entry.seo?.ogImageMediaId === mediaId || entry.publishedSeo?.ogImageMediaId === mediaId) {
+          count += 1;
+        }
+      }
+      return count;
+    },
+
     async countContentReferences(mediaId) {
       let count = 0;
       for (const entry of state.entries.values()) {
         const coverRef = entry.coverMediaId === mediaId || entry.publishedCoverMediaId === mediaId;
+        const seoOgRef = entry.seo?.ogImageMediaId === mediaId || entry.publishedSeo?.ogImageMediaId === mediaId;
         if (
           coverRef ||
+          seoOgRef ||
           dataReferencesMedia(entry.data, mediaId) ||
           dataReferencesMedia(entry.publishedData, mediaId)
         ) {

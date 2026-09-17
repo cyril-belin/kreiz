@@ -1,6 +1,14 @@
 ---
 import type { ContentView } from '@kreiz/core/content';
+import {
+  breadcrumbJsonLd,
+  jsonLdScriptTag,
+  resolveContentSeo,
+  seoHeadTags,
+  articleJsonLd,
+} from '@kreiz/core/seo';
 import type { GuideData } from '../content-types/guide.js';
+import { seoSite } from '../seo.js';
 import CoverPicture from './CoverPicture.astro';
 import '../styles/global.css';
 
@@ -9,6 +17,9 @@ import '../styles/global.css';
  * SSR du Core et la page publique `/guides/[slug]`. Le select fermé
  * `difficulty` est rendu en badge : la valeur stockée est du sens, la
  * présentation appartient au template.
+ *
+ * Slice 9 : head SEO résolue et rendue par le Core (même contrat que
+ * l'Article — `resolveContentSeo` + `seoHeadTags` + JSON-LD typé).
  */
 interface Props {
   view: ContentView<GuideData>;
@@ -20,6 +31,22 @@ const difficultyLabels: Record<GuideData['difficulty'], string> = {
   intermediaire: 'Intermédiaire',
   avance: 'Avancé',
 };
+const resolvedSeo = resolveContentSeo(seoSite, view, {
+  ogType: 'article',
+  description: view.data.excerpt,
+});
+const articleLd = articleJsonLd({
+  headline: view.title,
+  url: resolvedSeo.canonical,
+  datePublished: view.publishedAt ?? view.createdAt,
+  description: resolvedSeo.description,
+  imageUrl: resolvedSeo.og.image?.url,
+  publisherName: seoSite.organization?.name ?? seoSite.siteName,
+});
+const breadcrumbLd = breadcrumbJsonLd([
+  { name: seoSite.siteName, url: `${seoSite.siteUrl}/` },
+  { name: view.title, url: resolvedSeo.canonical },
+]);
 const publishedDate = view.publishedAt
   ? view.publishedAt.toLocaleDateString('fr-FR', { dateStyle: 'long' })
   : null;
@@ -29,9 +56,9 @@ const publishedDate = view.publishedAt
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{view.seo.title ?? view.title} — Kreiz demo</title>
-    {view.seo.description && <meta name="description" content={view.seo.description} />}
-    <meta name="robots" content="noindex, nofollow" />
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
+    <Fragment set:html={jsonLdScriptTag(articleLd)} />
+    <Fragment set:html={jsonLdScriptTag(breadcrumbLd)} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
     <main class="mx-auto max-w-2xl px-6 py-20">

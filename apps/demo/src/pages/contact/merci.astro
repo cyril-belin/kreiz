@@ -1,21 +1,30 @@
 ---
 import '../../styles/global.css';
 import { analyticsBeaconScript } from '@kreiz/core/analytics';
+import { resolvePageSeo, seoHeadTags } from '@kreiz/core/seo';
+import { seoSite } from '../../seo.js';
 
 
 /**
  * Page de remerciement — chemin déclaré dans la déclaration du formulaire
  * (`confirmationPath`) : destination de la redirection 303 post-soumission
  * (PRG, empêche la resoumission au refresh). Statique, sans données.
+ *
+ * Slice 9 : page utilitaire **noindex** — la head est résolue par le Core
+ * (robots noindex, pas de canonical, pas d'og:url).
  */
+const resolvedSeo = resolvePageSeo(seoSite, {
+  path: '/contact/merci',
+  title: 'Message envoyé',
+  noindex: true,
+});
 ---
 
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex" />
-    <title>Message envoyé — Kreiz demo</title>
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
     <main class="mx-auto max-w-2xl px-6 py-24">

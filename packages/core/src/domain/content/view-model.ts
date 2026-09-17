@@ -57,6 +57,13 @@ export interface ContentView<TData> {
   readonly seo: KreizContentSeo;
   /** Couverture résolue (`ready` uniquement), ou `null`. */
   readonly cover: PublicMediaView | null;
+  /**
+   * Image Open Graph **explicite** du contenu (`seo.ogImageMediaId`),
+   * résolue `ready` uniquement par l'appelant (lecteur de build : stricte ;
+   * admin : best-effort) — slice 9. `null` = pas d'OG explicite : la
+   * résolution SEO retombe sur la couverture puis les défauts Project.
+   */
+  readonly seoImage: PublicMediaView | null;
   /** Vues des champs richText déclarés (clé = nom du champ). */
   readonly richText: Readonly<Record<string, RichTextFieldView>>;
   /** Données spécifiques du type, validées par le schéma de la déclaration. */
@@ -132,6 +139,12 @@ export function resolveContentViewModel<TData>(
     /** Vues publiques des médias référencés par les champs richText. */
     richTextMedia?: ReadonlyMap<string, PublicMediaView>;
     /**
+     * Image Open Graph explicite (`seo.ogImageMediaId`) résolue par
+     * l'appelant — `ready` uniquement (slice 9 ; même contrat que la
+     * couverture : strict au build, best-effort en admin).
+     */
+    seoImage?: PublicMediaView | null;
+    /**
      * `true` (défaut — build public) : une référence non résolue est une
      * corruption → erreur explicite. `false` (admin : édition, preview —
      * même sémantique que la couverture non prête, mission §29) : la figure
@@ -176,6 +189,7 @@ export function resolveContentViewModel<TData>(
     createdAt: entry.createdAt,
     seo: entry.seo,
     cover: options.cover ?? null,
+    seoImage: options.seoImage ?? null,
     richText,
     data: parsed.data,
   };

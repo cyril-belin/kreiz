@@ -70,15 +70,16 @@ export function createContentReader(options: {
   const media = createMediaRepository(db);
 
   /**
-   * Résout les vues publiques des couvertures (`ready` uniquement) —
-   * absente ou non prête ⇒ `ContentDataCorruptedError` : la publication a
-   * validé `ready` au moment du Publish ; une divergence est une corruption
-   * (suppression physique hors service…) et ne se rend jamais en silence.
+   * Résout les vues publiques des couvertures **et** des images Open Graph
+   * explicites (slice 9 — `ready` uniquement, un seul lot) — absente ou non
+   * prête ⇒ `ContentDataCorruptedError` : la publication a validé `ready` au
+   * moment du Publish ; une divergence est une corruption (suppression
+   * physique hors service…) et ne se rend jamais en silence.
    */
-  async function resolveCovers(
-    coverMediaIds: ReadonlyArray<string | null>,
+  async function resolveMediaViews(
+    mediaIds: ReadonlyArray<string | null>,
   ): Promise<Map<string, ContentView<unknown>['cover']>> {
-    const ids = [...new Set(coverMediaIds.filter((id): id is string => id !== null))];
+    const ids = [...new Set(mediaIds.filter((id): id is string => id !== null))];
     const resolved = new Map<string, ContentView<unknown>['cover']>();
     if (ids.length === 0) return resolved;
     const rows = await media.listReadyByIds(ids);
@@ -86,13 +87,13 @@ export function createContentReader(options: {
     for (const id of ids) {
       const row = byId.get(id);
       if (!row) {
-        throw new ContentDataCorruptedError(id, 'couverture publiée absente ou non prête (media)');
+        throw new ContentDataCorruptedError(id, 'média publié absent ou non prêt (media)');
       }
       const publicBaseUrl = options.mediaPublicBaseUrl;
       if (!publicBaseUrl) {
         throw new ContentDataCorruptedError(
           id,
-          'couverture publiée sans base publique configurée (KREIZ_STORAGE_PUBLIC_BASE_URL absente)',
+          'média publié sans base publique configurée (KREIZ_STORAGE_PUBLIC_BASE_URL absente)',
         );
       }
       resolved.set(id, resolvePublicMediaView(row, { publicBaseUrl }));
@@ -107,7 +108,13 @@ export function createContentReader(options: {
         row,
         published: resolvePublishedProjection(row),
       }));
-      const covers = await resolveCovers(projections.map(({ published }) => published.coverMediaId));
+      // Couvertures + images OG explicites — **un seul** appel batch
+      // (slice 9 : l'image OG est un média publié comme les autres).
+      const mediaViews = await resolveMediaViews([
+        ...projections.map(({ published }) => published.coverMediaId),
+        ...projections.map(({ published }) => published.seo.ogImageMediaId ?? null),
+      ]);
+      const covers = mediaViews;
       // Médias du rich text — **un seul** appel batch pour toutes les pages
       // du type (slice 6 §15) : un snapshot référençant un média absent ou
       // non prêt est une corruption, le build échoue explicitement.
@@ -125,6 +132,7 @@ export function createContentReader(options: {
       );
       const views: Array<ContentView<InferContentTypeData<typeof declaration>>> = [];
       for (const { row, published } of projections) {
+        const seoImageId = published.seo.ogImageMediaId ?? null;
         views.push(
           resolveContentViewModel(
             declaration,
@@ -138,6 +146,7 @@ export function createContentReader(options: {
             {
               cover: published.coverMediaId ? covers.get(published.coverMediaId) ?? null : null,
               richTextMedia,
+              seoImage: seoImageId ? covers.get(seoImageId) ?? null : null,
             },
           ),
         );
@@ -157,13 +166,17 @@ export function createContentReader(options: {
       );
       if (!row) return null;
       const published = resolvePublishedProjection(row);
-      const covers = await resolveCovers([published.coverMediaId]);
+      const mediaViews = await resolveMediaViews([
+        published.coverMediaId,
+        published.seo.ogImageMediaId ?? null,
+      ]);
       const richTextMedia = await loadRichTextMediaMap(
         media,
         options.mediaPublicBaseUrl ?? null,
         declaration.fields,
         published.data,
       );
+      const seoImageId = published.seo.ogImageMediaId ?? null;
       return resolveContentViewModel(
         declaration,
         {
@@ -174,8 +187,9 @@ export function createContentReader(options: {
           seo: published.seo,
         },
         {
-          cover: published.coverMediaId ? covers.get(published.coverMediaId) ?? null : null,
+          cover: published.coverMediaId ? mediaViews.get(published.coverMediaId) ?? null : null,
           richTextMedia,
+          seoImage: seoImageId ? mediaViews.get(seoImageId) ?? null : null,
         },
       );
     },

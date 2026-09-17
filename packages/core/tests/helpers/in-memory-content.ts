@@ -91,6 +91,7 @@ export function createInMemoryContentRepository(
         ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
         ...(patch.data !== undefined ? { data: patch.data } : {}),
         ...(patch.coverMediaId !== undefined ? { coverMediaId: patch.coverMediaId } : {}),
+        ...(patch.seo !== undefined ? { seo: patch.seo as KreizContentEntry['seo'] } : {}),
         updatedBy: patch.updatedBy,
         updatedAt: patch.updatedAt,
       };
@@ -176,6 +177,24 @@ export function createInMemoryContentRepository(
       return [...state.entries.values()]
         .filter((entry) => active(entry) && entry.status === 'published' && entry.publishedSlug !== null)
         .map((entry) => ({ routeNamespace: entry.routeNamespace, slug: entry.publishedSlug as string }));
+    },
+
+    // Miroir en mémoire du filtre SQL réel (slice 9) : publiés actifs,
+    // noindex exclu — une page hors index n'appartient pas au sitemap.
+    async listPublishedForSitemap() {
+      return [...state.entries.values()]
+        .filter(
+          (entry) =>
+            active(entry) &&
+            entry.status === 'published' &&
+            entry.publishedSlug !== null &&
+            entry.publishedSeo?.noindex !== true,
+        )
+        .map((entry) => ({
+          routeNamespace: entry.routeNamespace,
+          publishedSlug: entry.publishedSlug as string,
+          publishedAt: entry.publishedAt,
+        }));
     },
   };
 }

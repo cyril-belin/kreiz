@@ -4,6 +4,7 @@ export const prerender = false;
 import AdminShell from '../../components/AdminShell.astro';
 import ContentFormFields from '../../components/ContentFormFields.astro';
 import CoverPicker from '../../components/CoverPicker.astro';
+import OgImagePicker from '../../components/OgImagePicker.astro';
 import MessagePanel from '../../components/MessagePanel.astro';
 import {
   ADMIN_CONTENT_INDEX_PATH,
@@ -88,6 +89,8 @@ const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', ti
 let formTitle = loaded?.entry.title ?? '';
 let formSlug = loaded?.entry.slug ?? '';
 let formCoverMediaId: string | null = loaded?.entry.coverMediaId ?? null;
+/** SEO éditorial courant — valeur initiale = état stocké, puis saisie (re-rendu fidèle). */
+let formSeo: Record<string, unknown> = { ...loaded?.entry.seo };
 let fieldValues: Record<string, FormFieldValue> = formValuesFromData(
   declaration?.fields ?? {},
   loaded?.entry.data ?? {},
@@ -162,6 +165,7 @@ if (loaded && Astro.request.method === 'POST') {
       formTitle = parsed.title;
       formSlug = parsed.slug;
       formCoverMediaId = parsed.coverMediaId;
+      formSeo = parsed.seo;
       fieldValues = parsed.values;
       const outcome = await access.runtime.content.updateDraft({
         entryId,
@@ -169,6 +173,7 @@ if (loaded && Astro.request.method === 'POST') {
         slug: parsed.slug.length > 0 ? parsed.slug : undefined,
         data: parsed.data,
         coverMediaId: parsed.coverMediaId,
+        seo: parsed.seo,
         actorAdminId: access.access.admin.id,
       });
       if (outcome.kind === 'updated') {
@@ -386,6 +391,108 @@ if (loaded && Astro.request.method === 'POST') {
               selectedThumbnailUrl={coverThumbnail(loaded.view.cover)}
               error={fieldErrors.cover}
             />
+
+            <fieldset class="kz-fieldset">
+              <legend class="kz-legend">SEO</legend>
+              <p class="kz-help">
+                Optionnel — par défaut, le titre du contenu et sa couverture suffisent. Ces
+                réglages ne modifient le site public qu'à la prochaine publication.
+              </p>
+
+              <div class="kz-field">
+                <label class="kz-label" for="kz-seo-title">Titre SEO</label>
+                <p class="kz-help">Sinon : titre du contenu, habillé du nom du site.</p>
+                <input
+                  class="kz-input"
+                  type="text"
+                  id="kz-seo-title"
+                  name="seo_title"
+                  value={typeof formSeo.title === 'string' ? formSeo.title : ''}
+                  maxlength={120}
+                  aria-invalid={fieldErrors.seo_title ? 'true' : undefined}
+                />
+                {fieldErrors.seo_title && <p class="kz-field-error" role="alert">{fieldErrors.seo_title}</p>}
+              </div>
+
+              <div class="kz-field">
+                <label class="kz-label" for="kz-seo-description">Meta description</label>
+                <p class="kz-help">Sinon : accroche ou début du texte. Texte pur, ~2 phrases.</p>
+                <textarea
+                  class="kz-input"
+                  id="kz-seo-description"
+                  name="seo_description"
+                  rows="3"
+                  maxlength={300}
+                  aria-invalid={fieldErrors.seo_description ? 'true' : undefined}>{typeof formSeo.description === 'string' ? formSeo.description : ''}</textarea>
+                {fieldErrors.seo_description && <p class="kz-field-error" role="alert">{fieldErrors.seo_description}</p>}
+              </div>
+
+              <div class="kz-field">
+                <label class="kz-label" for="kz-seo-canonical">URL canonique (override)</label>
+                <p class="kz-help">
+                  Réservé aux cas particuliers — par défaut, l'adresse publique du contenu est
+                  canonique. Chemin interne (« /chemin ») ou URL du même domaine.
+                </p>
+                <input
+                  class="kz-input"
+                  type="text"
+                  id="kz-seo-canonical"
+                  name="seo_canonical"
+                  value={typeof formSeo.canonicalOverride === 'string' ? formSeo.canonicalOverride : ''}
+                  maxlength={2048}
+                  autocomplete="off"
+                  aria-invalid={fieldErrors.seo_canonical ? 'true' : undefined}
+                />
+                {fieldErrors.seo_canonical && <p class="kz-field-error" role="alert">{fieldErrors.seo_canonical}</p>}
+              </div>
+
+              <div class="kz-field kz-field--checkbox">
+                <input
+                  type="checkbox"
+                  id="kz-seo-noindex"
+                  name="seo_noindex"
+                  checked={formSeo.noindex === true}
+                />
+                <label class="kz-label" for="kz-seo-noindex">
+                  Exclure des moteurs de recherche (noindex)
+                </label>
+              </div>
+
+              <OgImagePicker
+                readyMedia={readyMedia}
+                selectedMediaId={typeof formSeo.ogImageMediaId === 'string' ? formSeo.ogImageMediaId : null}
+                selectedThumbnailUrl={coverThumbnail(loaded.view.seoImage)}
+                error={fieldErrors.seo_og_image}
+              />
+
+              <div class="kz-field">
+                <label class="kz-label" for="kz-seo-og-title">Titre Open Graph (override)</label>
+                <p class="kz-help">Sinon : titre résolu ci-dessus.</p>
+                <input
+                  class="kz-input"
+                  type="text"
+                  id="kz-seo-og-title"
+                  name="seo_og_title"
+                  value={typeof formSeo.ogTitle === 'string' ? formSeo.ogTitle : ''}
+                  maxlength={120}
+                  aria-invalid={fieldErrors.seo_og_title ? 'true' : undefined}
+                />
+                {fieldErrors.seo_og_title && <p class="kz-field-error" role="alert">{fieldErrors.seo_og_title}</p>}
+              </div>
+
+              <div class="kz-field">
+                <label class="kz-label" for="kz-seo-og-description">Description Open Graph (override)</label>
+                <p class="kz-help">Sinon : description résolue ci-dessus.</p>
+                <textarea
+                  class="kz-input"
+                  id="kz-seo-og-description"
+                  name="seo_og_description"
+                  rows="3"
+                  maxlength={300}
+                  aria-invalid={fieldErrors.seo_og_description ? 'true' : undefined}>{typeof formSeo.ogDescription === 'string' ? formSeo.ogDescription : ''}</textarea>
+                {fieldErrors.seo_og_description && <p class="kz-field-error" role="alert">{fieldErrors.seo_og_description}</p>}
+              </div>
+            </fieldset>
 
             {fieldErrors['_form'] && <p class="kz-alert" role="alert">{fieldErrors['_form']}</p>}
 

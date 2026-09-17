@@ -1,5 +1,6 @@
 import config, { contentTemplates } from 'virtual:kreiz/config';
 import { createContentTypeRegistry, type ContentTypeRegistry } from '../domain/content/registry.js';
+import type { SeoSiteConfig } from '../domain/seo/site-config.js';
 
 /**
  * Registre runtime des types de contenu — la fin du canal
@@ -25,4 +26,14 @@ export function getContentRegistry(): ContentTypeRegistry {
     templates: contentTemplates,
   });
   return cachedRegistry;
+}
+
+/**
+ * Configuration SEO du site résolue (slice 9) — injectée aux services
+ * contenu/publication (validation des overrides canoniques). `null` quand
+ * le Project n'a pas configuré de bloc `seo` : les overrides canoniques
+ * absolus sont alors refusés, jamais dérivés d'un Host.
+ */
+export function getKreizSeoSiteConfig(): SeoSiteConfig | null {
+  return config.seo ?? null;
 }

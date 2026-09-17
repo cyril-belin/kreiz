@@ -10,7 +10,7 @@ describe('carte exports de @kreiz/core — frontière mécanique du slice 0', ()
 
   it('n’expose que les points d’entrée publics — aucun deep import possible', () => {
     expect(Object.keys(packageJson.exports).sort()).toEqual(
-      ['.', './analytics', './content', './data', './forms', './media', './rich-text', './package.json', './virtual'].sort(),
+      ['.', './analytics', './content', './data', './forms', './media', './rich-text', './seo', './package.json', './virtual'].sort(),
     );
   });
 });

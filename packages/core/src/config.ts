@@ -29,6 +29,12 @@ import {
   resolveAnalyticsConfig,
   type KreizAnalyticsConfig,
 } from './domain/analytics/config.js';
+import {
+  resolveSeoSiteConfig,
+  seoSiteInputSchema,
+  type SeoSiteConfig,
+  type SeoSiteConfigInput,
+} from './domain/seo/site-config.js';
 
 /**
  * Configuration fournie par l'application consommatrice à l'intégration Astro
@@ -135,6 +141,13 @@ export const kreizConfigSchema = z.strictObject({
   forms: z.array(contactFormDeclarationSchema).max(20).optional(),
   /** Configuration analytics du Project (slice 8) — défauts privacy-safe. */
   analytics: analyticsDeclarationSchema.optional(),
+  /**
+   * Configuration SEO du site (slice 9) — revalidée par le même schéma que
+   * `defineSeoSiteConfig` (fail fast au chargement, idempotent sur la forme
+   * normalisée). Sans ce bloc : pas de canonical/sitemap URL — le Core
+   * n'invente jamais une base.
+   */
+  seo: seoSiteInputSchema.optional(),
 });
 
 /**
@@ -170,15 +183,20 @@ export type KreizConfig = {
   }>;
   /** Analytics — toujours résolue (défauts privacy-safe appliqués). */
   analytics: KreizAnalyticsConfig;
+  /** SEO du site — résolue (siteUrl normalisé, gabarit de titre appliqué), ou `undefined`. */
+  seo?: SeoSiteConfig;
 };
 
 /**
  * Forme acceptée en **entrée** de `kreiz()` — les champs analytics y sont
  * optionnels (les défauts privacy-safe sont appliqués par
- * `normalizeKreizConfig`) ; la sortie est toujours un `KreizConfig` complet.
+ * `normalizeKreizConfig`) et le SEO est accepté brut (`SeoSiteConfigInput`,
+ * ex. littéral inline) ou déjà normalisé (`defineSeoSiteConfig`) — la
+ * sortie est toujours un `KreizConfig` complet.
  */
-export type KreizConfigInput = Omit<KreizConfig, 'analytics'> & {
+export type KreizConfigInput = Omit<KreizConfig, 'analytics' | 'seo'> & {
   analytics?: Partial<KreizAnalyticsConfig>;
+  seo?: SeoSiteConfigInput | SeoSiteConfig;
 };
 
 export function normalizeKreizConfig(input: unknown): KreizConfig {
@@ -186,6 +204,7 @@ export function normalizeKreizConfig(input: unknown): KreizConfig {
     content?: { types: Array<Record<string, unknown>> };
     forms?: Array<Record<string, unknown>>;
     analytics?: unknown;
+    seo?: unknown;
   };
   const result: KreizConfig = {
     // Analytics toujours résolue : la forme sérialisée porte les défauts
@@ -193,6 +212,11 @@ export function normalizeKreizConfig(input: unknown): KreizConfig {
     // logique de repli dispersée.
     analytics: resolveAnalyticsConfig(parsed.analytics),
   };
+  if (parsed.seo) {
+    // SEO toujours résolue (même logique) : le runtime et les routes de
+    // build lisent une forme normalisée, jamais le littéral du Project.
+    result.seo = resolveSeoSiteConfig(parsed.seo);
+  }
   if (parsed.content) {
     result.content = {
       types: parsed.content.types.map((type) => ({

@@ -32,6 +32,8 @@ import {
   PUBLIC_ANALYTICS_BEACON_PATTERN,
   PUBLIC_ANALYTICS_EVENT_PATTERN,
   PUBLIC_FORM_SUBMIT_PATTERN,
+  PUBLIC_ROBOTS_PATH,
+  PUBLIC_SITEMAP_PATH,
 } from './http/admin-routes.js';
 import { validateDeclarationCrossConstraints } from './domain/content/registry.js';
 import {
@@ -285,6 +287,22 @@ export function kreiz(input?: KreizConfigInput): AstroIntegration {
         injectRoute({
           pattern: PUBLIC_ANALYTICS_BEACON_PATTERN,
           entrypoint: fileURLToPath(new URL('./analytics/beacon.js', import.meta.url)),
+          prerender: true,
+        });
+
+        // SEO public (slice 9) — sitemap.xml et robots.txt **prérendus**
+        // (fichiers statiques au build, CDN : mesurer/indexer n'ajoute
+        // aucun runtime dynamique au site public). Hors /admin, sans
+        // session — même invariant que les routes publiques ci-dessus
+        // (garde mécanique PUBLIC_ROUTE_PATTERNS).
+        injectRoute({
+          pattern: PUBLIC_SITEMAP_PATH,
+          entrypoint: fileURLToPath(new URL('./seo/public-sitemap.js', import.meta.url)),
+          prerender: true,
+        });
+        injectRoute({
+          pattern: PUBLIC_ROBOTS_PATH,
+          entrypoint: fileURLToPath(new URL('./seo/public-robots.js', import.meta.url)),
           prerender: true,
         });
       },

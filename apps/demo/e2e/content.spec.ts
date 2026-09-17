@@ -35,7 +35,7 @@ async function createArticleDraft(
   },
 ): Promise<void> {
   await page.goto('/admin/content/article/new');
-  await page.getByRole('textbox', { name: 'Titre' }).fill(values.title);
+  await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(values.title);
   if (values.slug) await page.getByLabel('Slug').fill(values.slug);
   await page.getByLabel('Accroche').fill(values.excerpt);
   await page.getByLabel('Corps').fill(values.body);
@@ -72,7 +72,7 @@ test.describe('back-office — moteur de contenu', () => {
     await page.goto('/admin/content/article/new');
 
     const title = 'Article E2E création';
-    await page.getByRole('textbox', { name: 'Titre' }).fill(title);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(title);
     await page.getByLabel('Accroche').fill('Accroche du test E2E.');
     await page.getByLabel('Corps').fill('Paragraphe unique du corps E2E.');
     await page.getByLabel('Auteur').fill('Auteure E2E');
@@ -80,7 +80,7 @@ test.describe('back-office — moteur de contenu', () => {
 
     // Retour sur la page d'édition du brouillon créé.
     await expect(page).toHaveURL(/\/admin\/content\/article\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue(title);
+    await expect(page.getByRole('textbox', { name: 'Titre', exact: true })).toHaveValue(title);
     await expect(page.getByLabel('Accroche')).toHaveValue('Accroche du test E2E.');
     await expect(page.getByLabel('Auteur')).toHaveValue('Auteure E2E');
 
@@ -111,7 +111,7 @@ test.describe('back-office — moteur de contenu', () => {
     await login(page);
     await page.goto('/admin/content/article/new');
 
-    await page.getByRole('textbox', { name: 'Titre' }).fill('Article E2E invalide');
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill('Article E2E invalide');
     // Accroche (requis) laissée vide.
     await page.getByLabel('Corps').fill('Corps présent.');
     await page.getByLabel('Auteur').fill('Auteure E2E');
@@ -120,7 +120,7 @@ test.describe('back-office — moteur de contenu', () => {
     // Re-rendu du formulaire avec erreurs de champ, valeurs préservées.
     await expect(page).toHaveURL(/\/admin\/content\/article\/new$/);
     await expect(page.getByText('Ce champ est requis.').first()).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue('Article E2E invalide');
+    await expect(page.getByRole('textbox', { name: 'Titre', exact: true })).toHaveValue('Article E2E invalide');
 
     const rows = await query<{ count: string }>(
       'select count(*)::text as count from kreiz_content_entries where title = $1',
@@ -148,7 +148,7 @@ test.describe('back-office — moteur de contenu', () => {
     // Collision manuelle à la création : erreur explicite (jamais suffixée
     // en silence — le choix d'un admin ne se modifie pas tout seul).
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill('Article E2E collision');
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill('Article E2E collision');
     await page.getByLabel('Slug').fill('article-e2e-slug-choisi');
     await page.getByLabel('Accroche').fill('Accroche.');
     await page.getByLabel('Corps').fill('Corps.');

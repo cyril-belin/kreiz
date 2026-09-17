@@ -14,6 +14,8 @@ import {
 import { normalizeSlugInput, slugCandidates, slugify, SLUG_FALLBACK } from '../domain/content/slug.js';
 import { resolveContentViewModel, type ContentView } from '../domain/content/view-model.js';
 import { resolveReadyRichTextMediaMap } from '../content/rich-text-media.js';
+import type { SeoSiteConfig } from '../domain/seo/site-config.js';
+import { validateContentSeoFields } from '../domain/seo/validate.js';
 import type { RebuildRequestReason, RebuildTrigger, RebuildTriggerResult } from '../ports/rebuild.js';
 import { auditRebuildFailure } from './rebuild-audit.js';
 
@@ -69,6 +71,12 @@ export type ContentServiceDeps = {
    * stockage non configuré : les vues de couverture restent alors `null`.
    */
   mediaPublicBaseUrl: string | null;
+  /**
+   * Configuration SEO du site (slice 9) — requise pour accepter un override
+   * canonique absolu (vérification même origine) et pour le Publish.
+   * `null` = aucun SEO de site : les overrides canoniques sont refusés.
+   */
+  seoSite?: SeoSiteConfig | null;
 };
 
 /** Résultat d'une mutation de brouillon validée. */
@@ -106,6 +114,12 @@ export type UpdateDraftInput = {
   data: Record<string, unknown>;
   /** `undefined` = inchangée · `null` = retirer · string = média existant requis. */
   coverMediaId?: string | null;
+  /**
+   * SEO éditorial (slice 9) — `undefined` = inchangé, objet brut = validé
+   * (bornes, formats, média existant) puis **remplacé**. Le snapshot public
+   * ne bascule qu'au Publish (contrat Save != Publish).
+   */
+  seo?: unknown;
   actorAdminId: string;
 };
 
@@ -179,6 +193,69 @@ export function createContentService(deps: ContentServiceDeps) {
     return mediaRow.id;
   }
 
+  /**
+   * Image Open Graph au **Save** (slice 9) — même contrat que la couverture :
+   * le média doit exister et ne pas être supprimé ; un média en traitement
+   * reste acceptable en brouillon, la publication seule exige `ready`.
+   */
+  async function validateSeoOgImageInput(
+    ogImageMediaId: string,
+    errors: ContentFieldErrors,
+  ): Promise<string | null> {
+    const mediaRow = await deps.media.findById(ogImageMediaId);
+    if (!mediaRow || mediaRow.deletedAt) {
+      errors.seo_og_image = "L'image Open Graph sélectionnée n'existe pas.";
+      return null;
+    }
+    return mediaRow.id;
+  }
+
+  /**
+   * Valide le SEO éditorial brut (formulaire/JSONB) : schéma strict borné,
+   * image OG existante, override canonique **même origine** quand il est
+   * absolu (la base fiable du Project fait foi — jamais un Host client,
+   * mission §35). Retourne le SEO normalisé ou `null` (erreurs posées).
+   */
+  async function validateSeoInput(
+    seo: unknown,
+    errors: ContentFieldErrors,
+  ): Promise<Record<string, unknown> | null> {
+    const validated = validateContentSeoFields(seo, errors);
+    if (validated === null) return null;
+    if (validated.ogImageMediaId) {
+      const mediaId = await validateSeoOgImageInput(validated.ogImageMediaId, errors);
+      if (mediaId === null) return null;
+    }
+    const canonicalOverride = validated.canonicalOverride;
+    if (canonicalOverride && !canonicalOverride.startsWith('/')) {
+      const seoSite = deps.seoSite ?? null;
+      if (!seoSite) {
+        errors.seo_canonical =
+          "Le canonical absolu exige une configuration SEO du site (siteUrl) — utilisez un chemin interne (« /… »).";
+        return null;
+      }
+      let origin: string | null = null;
+      try {
+        const url = new URL(canonicalOverride);
+        origin = url.protocol === 'https:' || url.protocol === 'http:' ? url.origin : null;
+      } catch {
+        origin = null;
+      }
+      let siteOrigin: string | null = null;
+      try {
+        siteOrigin = new URL(seoSite.siteUrl).origin;
+      } catch {
+        siteOrigin = null;
+      }
+      if (origin === null || siteOrigin === null || origin !== siteOrigin) {
+        errors.seo_canonical =
+          'Le canonical absolu doit rester sur le domaine du site — utilisez un chemin interne (« /… ») sinon.';
+        return null;
+      }
+    }
+    return validated as Record<string, unknown>;
+  }
+
   /** Vue publique de la couverture d'un contenu — `ready` uniquement, sinon `null`. */
   async function resolveCoverView(
     coverMediaId: string | null,
@@ -194,7 +271,8 @@ export function createContentService(deps: ContentServiceDeps) {
    * médias prêts sont rendus, un média non prêt omet sa figure (comme une
    * couverture non prête, mission §29) sans jamais empêcher l'édition ou la
    * preview d'un brouillon. La publication, elle, valide strictement
-   * (service de publication + `validateRichTextMediaForPublish`).
+   * (service de publication + `validateRichTextMediaForPublish`). L'image
+   * OG explicite suit le même best-effort (slice 9).
    */
   async function resolveAdminView(
     declaration: ResolvedContentTypeDeclaration,
@@ -209,8 +287,17 @@ export function createContentService(deps: ContentServiceDeps) {
     return resolveContentViewModel(declaration, entry, {
       cover: await resolveCoverView(entry.coverMediaId),
       richTextMedia,
+      seoImage: await resolveSeoImageView(entry.seo.ogImageMediaId ?? null),
       richTextStrict: false,
     });
+  }
+
+  /** Vue publique de l'image OG explicite — best-effort (`ready` uniquement), jamais bloquante en admin. */
+  async function resolveSeoImageView(ogImageMediaId: string | null): Promise<PublicMediaView | null> {
+    if (!ogImageMediaId || !deps.mediaPublicBaseUrl) return null;
+    const mediaRow = await deps.media.findById(ogImageMediaId);
+    if (!mediaRow || mediaRow.status !== 'ready') return null;
+    return resolvePublicMediaView(mediaRow, { publicBaseUrl: deps.mediaPublicBaseUrl });
   }
 
   return {
@@ -368,6 +455,13 @@ export function createContentService(deps: ContentServiceDeps) {
         }
       }
 
+      // SEO éditorial (slice 9) : `undefined` = inchangé, objet = validé puis
+      // remplacé. Jamais les colonnes snapshot : le public bascule au Publish.
+      let seo: Record<string, unknown> | undefined;
+      if (input.seo !== undefined) {
+        seo = (await validateSeoInput(input.seo, errors)) ?? undefined;
+      }
+
       if (Object.keys(errors).length > 0 || data === null) {
         return { kind: 'invalid', errors };
       }
@@ -378,6 +472,7 @@ export function createContentService(deps: ContentServiceDeps) {
           slug,
           data,
           ...(coverMediaId !== undefined ? { coverMediaId } : {}),
+          ...(seo !== undefined ? { seo } : {}),
           updatedBy: input.actorAdminId,
           updatedAt: now,
         });

@@ -1,14 +1,46 @@
 ---
 import '../styles/global.css';
 import { analyticsBeaconScript } from '@kreiz/core/analytics';
+import {
+  jsonLdScriptTag,
+  organizationJsonLd,
+  resolvePageSeo,
+  seoHeadTags,
+  websiteJsonLd,
+} from '@kreiz/core/seo';
+import { seoSite } from '../seo.js';
 
+/**
+ * Slice 9 — head de l'accueil résolue par le Core : title/description par
+ * défaut du site, canonical sur la base déclarée, JSON-LD WebSite +
+ * Organization construits avec les builders typés (`@kreiz/core/seo`).
+ */
+const resolvedSeo = resolvePageSeo(seoSite, {
+  path: '/',
+  title: seoSite.siteName,
+  description: seoSite.defaultDescription,
+});
+const websiteLd = websiteJsonLd({
+  name: seoSite.siteName,
+  url: seoSite.siteUrl,
+  description: seoSite.defaultDescription,
+});
+const organizationLd = seoSite.organization
+  ? organizationJsonLd({
+      name: seoSite.organization.name,
+      url: seoSite.organization.url,
+      logoUrl: seoSite.organization.logoUrl,
+    })
+  : null;
 ---
 
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kreiz — demo</title>
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
+    <Fragment set:html={jsonLdScriptTag(websiteLd)} />
+    {organizationLd && <Fragment set:html={jsonLdScriptTag(organizationLd)} />}
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
     <main class="mx-auto max-w-2xl px-6 py-24">

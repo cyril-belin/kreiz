@@ -1094,3 +1094,34 @@ body {
   color: var(--kz-text-muted);
   font-size: 13px;
 }
+
+/* ——— Section SEO du formulaire de contenu (slice 9) ——— */
+
+.kz-fieldset {
+  margin: 0 0 16px;
+  padding: 14px 16px 4px;
+  border: 1px solid var(--kz-border);
+  border-radius: 8px;
+}
+
+.kz-legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.kz-field--checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kz-field--checkbox .kz-label {
+  margin-bottom: 0;
+}
+
+.kz-field--checkbox input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--kz-accent, #2563eb);
+}

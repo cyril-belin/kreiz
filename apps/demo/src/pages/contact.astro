@@ -1,8 +1,10 @@
 ---
 import '../styles/global.css';
 import { renderContactFormHtml, issueFormToken } from '@kreiz/core/forms';
+import { resolvePageSeo, seoHeadTags } from '@kreiz/core/seo';
 import { contactForm } from '../forms/contact.js';
 import { analyticsBeaconScript } from '@kreiz/core/analytics';
+import { seoSite } from '../seo.js';
 
 
 /**
@@ -12,19 +14,27 @@ import { analyticsBeaconScript } from '@kreiz/core/analytics';
  * d'émission est signé au rendu avec KREIZ_SECRET : sans secret (build de
  * fork), le formulaire s'affiche mais la soumission sera refusée — état
  * documenté dans .env.example, jamais un échec silencieux en production.
+ *
+ * Slice 9 : head SEO résolue par le Core (canonical `/contact`).
  */
 const token = issueFormToken({
   formKey: contactForm.key,
   secret: process.env.KREIZ_SECRET ?? null,
 }).token;
 const formHtml = renderContactFormHtml({ form: contactForm, token });
+const resolvedSeo = resolvePageSeo(seoSite, {
+  path: '/contact',
+  title: 'Contact',
+  description:
+    'Écrivez-nous : le formulaire de démonstration rendu par le Core, sans JavaScript, avec anti-spam en couches.',
+});
 ---
 
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Contact — Kreiz demo</title>
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
     <main class="mx-auto max-w-2xl px-6 py-24">

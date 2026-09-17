@@ -4,6 +4,7 @@ import { kreiz } from '@kreiz/core';
 import { defineConfig } from 'astro/config';
 import { articleType, guideType, caseStudyType } from './src/content-types/index.js';
 import { contactForm } from './src/forms/contact.js';
+import { seoSite } from './src/seo.js';
 
 // apps/demo est un consommateur EXTERNE de @kreiz/core : seule l'API publique
 // du package est utilisée. L'intégration injecte les routes du Core (login,
@@ -36,6 +37,9 @@ export default defineConfig({
         types: [articleType, guideType, caseStudyType],
       },
       forms: [contactForm],
+      // SEO (slice 9) — config déclarée en code (src/seo.ts) : le Core en
+      // dérive canonical, sitemap, robots.txt et les balises sociales.
+      seo: seoSite,
       // Analytics privacy-first (slice 8) — défauts privacy-safe (détails
       // dans docs/slices/slice-8.md) : ici explicite pour la démonstration.
       analytics: {

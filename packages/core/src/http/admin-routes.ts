@@ -103,11 +103,27 @@ export const PUBLIC_ANALYTICS_BEACON_PATH = PUBLIC_ANALYTICS_BEACON_PATTERN;
 /**
  * **Route publique** : `/api/forms/[key]` (cadrage §5 — POST formulaires ;
  * cadrage §2/§10 : le cookie de session admin vit sous `Path=/admin`, une
- * route publique doit donc vivre **hors** du préfixe et ne dépend jamais de
- * la session). Liste séparée de `ADMIN_ROUTE_PATTERNS`, garde mécanique
+ * route publique doit donc vivre **hors** du préfixe et ne dépend jamais
+ * de la session). Liste séparée de `ADMIN_ROUTE_PATTERNS`, garde mécanique
  * dédiée dans `tests/admin-routes.test.ts`.
  */
 export const PUBLIC_FORM_SUBMIT_PATTERN = '/api/forms/[key]';
+
+// ——— SEO public (slice 9) — fichiers **prérendus**, hors /admin, sans session ———
+
+/**
+ * Sitemap du site — route **prérendue** (fichier statique au build, comme
+ * le beacon analytics) : liste des contenus publiés indexables + pages
+ * statiques déclarées du Project. Sans base au build, l'urlset ne porte
+ * que les chemins déclarés — jamais d'échec de build.
+ */
+export const PUBLIC_SITEMAP_PATH = '/sitemap.xml';
+/**
+ * robots.txt — route **prérendue** : politique de crawl du Core (espace
+ * public indexable, `/admin` et `/api` exclus) + URL absolue du sitemap
+ * quand le Project a configuré sa base canonique.
+ */
+export const PUBLIC_ROBOTS_PATH = '/robots.txt';
 
 /** Patterns des routes admin injectées par l'intégration (tous sous le préfixe). */
 export const ADMIN_ROUTE_PATTERNS = [
@@ -142,6 +158,8 @@ export const PUBLIC_ROUTE_PATTERNS = [
   PUBLIC_FORM_SUBMIT_PATTERN,
   PUBLIC_ANALYTICS_EVENT_PATTERN,
   PUBLIC_ANALYTICS_BEACON_PATTERN,
+  PUBLIC_SITEMAP_PATH,
+  PUBLIC_ROBOTS_PATH,
 ] as const;
 
 // ——— Constructeurs d'URL admin (pages et formulaires) ———

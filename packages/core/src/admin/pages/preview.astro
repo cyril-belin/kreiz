@@ -35,7 +35,17 @@ let error: { status: number; title: string; description: string } | null = null;
 try {
   const loaded = await access.runtime.content.getContentForPreview(entryId);
   templateComponent = loaded.declaration.template;
-  view = loaded.view;
+  // La preview n'est **jamais** indexable (mission §20) : le noindex est
+  // imposé à la vue passée au template — la résolution SEO partagée
+  // (`resolveContentSeo`) en déduit `robots noindex` **et** l'absence de
+  // canonical/og:url (une URL publique n'est pas celle d'une preview).
+  // L'en-tête `X-Robots-Tag: noindex` du socle admin reste la garantie
+  // mécanique, y compris pour un template du Project qui négligerait le
+  // head SEO.
+  view = {
+    ...loaded.view,
+    seo: { ...loaded.view.seo, noindex: true },
+  };
 } catch (cause) {
   const name = (cause as { name?: string }).name;
   if (name === 'ContentNotFoundError') {

@@ -42,6 +42,10 @@
       "types": "./dist/analytics/index.d.ts",
       "default": "./dist/analytics/index.js"
     },
+    "./seo": {
+      "types": "./dist/seo/index.d.ts",
+      "default": "./dist/seo/index.js"
+    },
     "./virtual": {
       "types": "./dist/virtual.d.ts"
     },

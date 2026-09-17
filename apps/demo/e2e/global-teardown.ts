@@ -89,6 +89,7 @@ export default async function globalTeardown(): Promise<void> {
     }
   } finally {
     rmSync(join(import.meta.dirname, '.media-state.json'), { force: true });
+    rmSync(join(import.meta.dirname, '.seo-state.json'), { force: true });
     stopStorageServer();
     await stopHookServer();
     await stopMailServer();

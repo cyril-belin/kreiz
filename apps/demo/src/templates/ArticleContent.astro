@@ -1,6 +1,14 @@
 ---
 import type { ContentView } from '@kreiz/core/content';
+import {
+  breadcrumbJsonLd,
+  jsonLdScriptTag,
+  resolveContentSeo,
+  seoHeadTags,
+  articleJsonLd,
+} from '@kreiz/core/seo';
 import type { ArticleData } from '../content-types/article.js';
+import { seoSite } from '../seo.js';
 import CoverPicture from './CoverPicture.astro';
 import '../styles/global.css';
 
@@ -13,12 +21,36 @@ import '../styles/global.css';
  *
  * Slice 5 : la couverture (`view.cover`) est rendue en `<picture>`
  * responsive via le composant local `CoverPicture` (helpers `@kreiz/core/media`).
+ *
+ * Slice 9 : la head publique est **résolue** (`resolveContentSeo`) et rendue
+ * par le Core (`seoHeadTags`) — canonical, robots, Open Graph, Twitter —
+ * complétée par du JSON-LD construit avec les builders typés. Aucune balise
+ * meta n'est écrite à la main depuis du HTML arbitraire. En preview, le
+ * Core impose `noindex` à la vue : la même résolution produit une head non
+ * indexable, sans canonical.
  */
 interface Props {
   view: ContentView<ArticleData>;
 }
 
 const { view } = Astro.props;
+const resolvedSeo = resolveContentSeo(seoSite, view, {
+  ogType: 'article',
+  description: view.data.excerpt,
+});
+const articleLd = articleJsonLd({
+  headline: view.title,
+  url: resolvedSeo.canonical,
+  datePublished: view.publishedAt ?? view.createdAt,
+  authorName: view.data.author,
+  description: resolvedSeo.description,
+  imageUrl: resolvedSeo.og.image?.url,
+  publisherName: seoSite.organization?.name ?? seoSite.siteName,
+});
+const breadcrumbLd = breadcrumbJsonLd([
+  { name: seoSite.siteName, url: `${seoSite.siteUrl}/` },
+  { name: view.title, url: resolvedSeo.canonical },
+]);
 const publishedDate = view.publishedAt
   ? view.publishedAt.toLocaleDateString('fr-FR', { dateStyle: 'long' })
   : null;
@@ -28,9 +60,9 @@ const publishedDate = view.publishedAt
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{view.seo.title ?? view.title} — Kreiz demo</title>
-    {view.seo.description && <meta name="description" content={view.seo.description} />}
-    <meta name="robots" content="noindex, nofollow" />
+    <Fragment set:html={seoHeadTags(resolvedSeo)} />
+    <Fragment set:html={jsonLdScriptTag(articleLd)} />
+    <Fragment set:html={jsonLdScriptTag(breadcrumbLd)} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
     <main class="mx-auto max-w-2xl px-6 py-20">

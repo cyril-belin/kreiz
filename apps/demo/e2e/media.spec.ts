@@ -223,7 +223,7 @@ test.describe('back-office — médias (slice 5)', () => {
 
     // Création d'un Article avec la couverture A.
     await page.goto('/admin/content/article/new');
-    await page.getByRole('textbox', { name: 'Titre' }).fill(`Article média ${runId}`);
+    await page.getByRole('textbox', { name: 'Titre', exact: true }).fill(`Article média ${runId}`);
     await page.getByLabel('Accroche').fill('Accroche couverture.');
     await page.getByLabel('Corps').fill('Corps de l’article média.');
     await page.getByLabel('Auteur').fill('Auteure Média');
