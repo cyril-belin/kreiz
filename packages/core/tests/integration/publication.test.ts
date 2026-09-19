@@ -315,7 +315,10 @@ describeIntegration('publication — service + PostgreSQL réel', () => {
     );
     await publication.publishContent({ entryId: moved, actorAdminId: admin.id });
 
-    // Le Save change le slug éditorial ; l'occupation survient hors bande.
+    // Le Save change le slug éditorial ; un autre contenu actif (brouillon)
+    // occupe l'ancien slug courant — publier déplacé devrait créer la
+    // redirection /deplace-original → /deplace-nouveau, mais ce chemin est
+    // le slug vivant d'un autre contenu : refus avant toute écriture.
     await content.updateDraft({
       entryId: moved,
       title: 'Article déplacé',
@@ -332,16 +335,64 @@ describeIntegration('publication — service + PostgreSQL réel', () => {
         slug: 'deplace-original',
       }),
     );
-    await publication.publishContent({ entryId: occupant, actorAdminId: secondAdmin.id });
 
     const before = await entriesRepo.findById(moved);
     await expect(publication.publishContent({ entryId: moved, actorAdminId: admin.id })).rejects.toThrow(
       PublishedPathOccupiedError,
     );
-    // Aucun effet de bord : la ligne est intacte, l'occupant reste publié.
+    // Aucun effet de bord : la ligne est intacte, l'occupant reste brouillon.
     const after = await entriesRepo.findById(moved);
     expect(after).toEqual(before);
-    expect((await entriesRepo.findById(occupant))!.status).toBe('published');
+    expect((await entriesRepo.findById(occupant))!.status).toBe('draft');
+  });
+
+  it('espace d’URL public unique (revue sécurité finale) : un autre contenu déjà publié sur le même chemin → publication refusée, aucune collision', async () => {
+    // Scénario du finding : publier x → renommer le brouillon → recréer x →
+    // publier. Avant la revue, le second contenu publiait silencieusement sur
+    // la même URL publique (deux snapshots publiés en concurrence, build
+    // indéterminé). L'index unique `published_path_active_key` et le
+    // pré-contrôle du service refusent maintenant le second publish.
+    const first = createdId(
+      await content.createDraft({
+        contentTypeKey: `pub_${runId}`,
+        title: 'Premier titulaire',
+        data: validData,
+        actorAdminId: admin.id,
+        slug: 'chemin-unique',
+      }),
+    );
+    await publication.publishContent({ entryId: first, actorAdminId: admin.id });
+
+    // Le titulaire renomme son slug éditorial (Save != Publish : le chemin
+    // public `chemin-unique` reste figé par le snapshot du premier).
+    await content.updateDraft({
+      entryId: first,
+      title: 'Premier titulaire',
+      slug: 'chemin-renomme',
+      data: validData,
+      actorAdminId: admin.id,
+    });
+
+    const second = createdId(
+      await content.createDraft({
+        contentTypeKey: `pub_${runId}`,
+        title: 'Second prétendant',
+        data: validData,
+        actorAdminId: secondAdmin.id,
+        slug: 'chemin-unique',
+      }),
+    );
+    await expect(publication.publishContent({ entryId: second, actorAdminId: secondAdmin.id })).rejects.toThrow(
+      PublishedPathOccupiedError,
+    );
+    // Le premier reste publié sur son chemin ; le second reste brouillon.
+    expect((await entriesRepo.findById(first))!.status).toBe('published');
+    expect((await entriesRepo.findById(first))!.publishedSlug).toBe('chemin-unique');
+    expect((await entriesRepo.findById(second))!.status).toBe('draft');
+    expect((await entriesRepo.findById(second))!.publishedSlug).toBeNull();
+    // Un seul chemin public vivant dans le namespace.
+    const routes = await entriesRepo.listPublishedRoutes();
+    expect(routes.filter((route) => route.slug === 'chemin-unique')).toHaveLength(1);
   });
 
   it('course concurrentielle : l’index unique partiel refuse un doublon de slug actif (23505 réelle)', async () => {

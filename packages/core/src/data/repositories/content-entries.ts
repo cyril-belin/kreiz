@@ -109,6 +109,15 @@ export function createContentEntriesRepository(db: KreizDatabase) {
         coverMediaId?: string | null;
         /** SEO éditorial validé (slice 9) — objet complet, jamais un merge partiel. */
         seo?: Record<string, unknown>;
+        /**
+         ** **Concurrence optimiste** (passe de fermeture) : version attendue
+         * (`updated_at` lu au rendu du formulaire). Présent → l'UPDATE est
+         * **conditionnel** (`updated_at = version attendue`) : une édition
+         * concurrente entre-temps fait retourner `null` — jamais
+         * d'écrasement silencieux. Absent → comportement historique
+         * (flows programme/tests sans état rendu).
+         */
+        expectedUpdatedAt?: Date;
         updatedBy: string;
         updatedAt: Date;
       },
@@ -124,7 +133,24 @@ export function createContentEntriesRepository(db: KreizDatabase) {
           updatedBy: patch.updatedBy,
           updatedAt: patch.updatedAt,
         })
-        .where(and(eq(contentEntries.id, id), isNull(contentEntries.deletedAt)))
+        .where(
+          and(
+            eq(contentEntries.id, id),
+            isNull(contentEntries.deletedAt),
+            ...(patch.expectedUpdatedAt
+              ? [
+                  // Comparaison tronquée à la milliseconde : `timestamptz`
+                  // PostgreSQL garde les microsecondes (`defaultNow()`), que
+                  // la Date JS perd à la lecture — une égalité exacte serait
+                  // faussement conflictuelle pour toute ligne écrite par la
+                  // base. À la milliseconde : un Save concurrent change
+                  // `updated_at` de façon visible (0 ligne ⇒ conflit), une
+                  // re-soumission à version identique passe.
+                  sql`date_trunc('milliseconds', ${contentEntries.updatedAt}) = ${patch.expectedUpdatedAt.toISOString()}::timestamptz`,
+                ]
+              : []),
+          ),
+        )
         .returning();
       return rows.at(0) ?? null;
     },
@@ -168,6 +194,34 @@ export function createContentEntriesRepository(db: KreizDatabase) {
           and(
             eq(contentEntries.routeNamespace, routeNamespace),
             eq(contentEntries.slug, slug),
+            isNull(contentEntries.deletedAt),
+            ...(options.excludeId ? [ne(contentEntries.id, options.excludeId)] : []),
+          ),
+        )
+        .limit(1);
+      return rows.length > 0;
+    },
+
+    /**
+     * Collision sur l'espace d'URL **public** : un autre contenu publié
+     * vivant fige-t-il déjà ce `published_slug` dans le namespace ? Même
+     * périmètre que l'index unique partiel `published_path_active_key`
+     * (revue sécurité finale) — la contrainte reste l'arbitre final des
+     * courses ; cette lecture ne sert qu'un refus amical avant écriture.
+     */
+    async publishedPathOccupiedByOther(
+      routeNamespace: string,
+      publishedSlug: string,
+      options: { excludeId?: string } = {},
+    ): Promise<boolean> {
+      const rows = await db
+        .select({ id: contentEntries.id })
+        .from(contentEntries)
+        .where(
+          and(
+            eq(contentEntries.routeNamespace, routeNamespace),
+            eq(contentEntries.publishedSlug, publishedSlug),
+            eq(contentEntries.status, 'published'),
             isNull(contentEntries.deletedAt),
             ...(options.excludeId ? [ne(contentEntries.id, options.excludeId)] : []),
           ),

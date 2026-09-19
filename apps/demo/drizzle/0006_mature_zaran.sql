@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "kreiz_content_entries_published_path_active_key" ON "kreiz_content_entries" USING btree ("route_namespace","published_slug") WHERE "kreiz_content_entries"."status" = 'published' and "kreiz_content_entries"."deleted_at" is null;

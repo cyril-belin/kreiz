@@ -167,15 +167,32 @@ if (loaded && Astro.request.method === 'POST') {
       formCoverMediaId = parsed.coverMediaId;
       formSeo = parsed.seo;
       fieldValues = parsed.values;
-      const outcome = await access.runtime.content.updateDraft({
-        entryId,
-        title: parsed.title,
-        slug: parsed.slug.length > 0 ? parsed.slug : undefined,
-        data: parsed.data,
-        coverMediaId: parsed.coverMediaId,
-        seo: parsed.seo,
-        actorAdminId: access.access.admin.id,
-      });
+      let outcome;
+      try {
+        outcome = await access.runtime.content.updateDraft({
+          entryId,
+          title: parsed.title,
+          slug: parsed.slug.length > 0 ? parsed.slug : undefined,
+          data: parsed.data,
+          coverMediaId: parsed.coverMediaId,
+          seo: parsed.seo,
+          expectedUpdatedAt: parsed.expectedUpdatedAt.length > 0 ? parsed.expectedUpdatedAt : undefined,
+          actorAdminId: access.access.admin.id,
+        });
+      } catch (error) {
+        if ((error as { name?: string }).name === 'ContentConcurrentModificationError') {
+          // Concurrence optimiste : un autre administrateur a enregistré
+          // pendant la saisie — aucune donnée écrasée. La saisie reste
+          // affichée ; l'admin recharge la page et reporte ses modifiers.
+          formError =
+            'Ce contenu a été modifié par un autre administrateur pendant votre saisie. ' +
+            "Rien n'a été écrasé — rechargez la page pour récupérer la dernière version, puis reportez vos modifications.";
+          Astro.response.status = 409;
+          outcome = { kind: 'invalid', errors: {} };
+        } else {
+          throw error;
+        }
+      }
       if (outcome.kind === 'updated') {
         // Retour sur l'édition avec le bandeau de confirmation — pas de
         // re-rendu POST (F5 sans reproposer la soumission).
@@ -184,7 +201,7 @@ if (loaded && Astro.request.method === 'POST') {
         return Astro.redirect(redirectUrl.pathname + redirectUrl.search, 303);
       }
       fieldErrors = mergeContentFieldErrors(parsed.errors, outcome.errors);
-      Astro.response.status = 400;
+      if (Astro.response.status === 200) Astro.response.status = 400;
     }
   }
 }
@@ -343,6 +360,10 @@ if (loaded && Astro.request.method === 'POST') {
               </p>
             )}
             <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+            {/* Concurrence optimiste (passe de fermeture) : version rendue —
+                si un autre admin enregistre entre-temps, le Save est refusé
+                avec un bandeau, jamais un écrasement silencieux. */}
+            <input type="hidden" name="expected_updated_at" value={entry!.updatedAt.toISOString()} />
 
             <div class="kz-field">
               <label class="kz-label" for="kz-title">

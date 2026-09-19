@@ -322,6 +322,15 @@ export function parseRichTextDocument(input: unknown): KreizRichTextDocument {
       `Document trop volumineux (${RICH_TEXT_MAX_JSON_BYTES} octets maximum).`,
     );
   }
+  // Pré-scan de profondeur **itératif** (revue sécurité finale) : la récursion
+  // Zod sur un arbre hostile (~1000 niveaux, sous la borne de taille) lève un
+  // `RangeError` brut (débordement de pile) au lieu d'une erreur de domaine —
+  // le garde `depth-exceeded` ne courait qu'après le parse. On rejette
+  // l'imbrication structurelle excessive avant d'entrer dans le schéma, sans
+  // récursion. Cette borne est **plus large** que `RICH_TEXT_MAX_DEPTH` : le
+  // scan compte chaque niveau d'objet/tableau (un bloc a deux niveaux), et la
+  // garde éditoriale précise (conteneurs uniquement) reste `guardLimits`.
+  assertBoundedDepth(input);
   const parsed = documentSchema.safeParse(input);
   if (!parsed.success) {
     throw errorFromIssues(parsed.error.issues);
@@ -329,6 +338,39 @@ export function parseRichTextDocument(input: unknown): KreizRichTextDocument {
   const state: GuardState = { count: 0, depth: 0 };
   for (const block of parsed.data.content) guardLimits(block, state);
   return parsed.data;
+}
+
+/**
+ * Parcours itératif de la structure brute : compte l'imbrication **totale**
+ * (objets et tableaux confondus) et échoue au-delà de la borne — pile
+ * explicite, jamais la pile d'appels. Un document légitime au maximum de la
+ * garde éditoriale (30 conteneurs ≈ 70 niveaux bruts) passe largement ; un
+ * arbre hostile (≥ 400 niveaux) ne peut plus atteindre la récursion Zod.
+ * Tolérante aux formes invalides : le schéma strict reste responsable de la
+ * validité structurelle.
+ */
+const PRE_SCAN_MAX_STRUCTURAL_DEPTH = 400;
+
+function assertBoundedDepth(input: unknown): void {
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: input, depth: 0 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (depth > PRE_SCAN_MAX_STRUCTURAL_DEPTH) {
+      throw new RichTextDocumentError(
+        'depth-exceeded',
+        `Imbrication trop profonde (${RICH_TEXT_MAX_DEPTH} niveaux maximum).`,
+      );
+    }
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        if (child !== null && typeof child === 'object') stack.push({ node: child, depth: depth + 1 });
+      }
+    } else if (node !== null && typeof node === 'object') {
+      for (const value of Object.values(node as Record<string, unknown>)) {
+        if (value !== null && typeof value === 'object') stack.push({ node: value, depth: depth + 1 });
+      }
+    }
+  }
 }
 
 // ——— Valeur de champ (compat legacy + validation) ———

@@ -8,7 +8,7 @@ import type { Mailer, MailerSendResult, OutgoingEmail } from '../src/ports/maile
 import { defineContactForm } from '../src/domain/forms/declaration';
 import { formFields } from '../src/domain/forms/fields';
 import { issueFormToken } from '../src/domain/forms/token';
-import { CONTACT_NOTIFICATION_MAX_ATTEMPTS, CONTACT_RATE_LIMIT_MAX } from '../src/domain/forms/policy';
+import { CONTACT_NOTIFICATION_MAX_ATTEMPTS, CONTACT_RATE_LIMIT_MAX , CONTACT_NOTIFICATION_CLAIM_LEASE_MS } from '../src/domain/forms/policy';
 
 /**
  * Service de contact — orchestration anti-spam, idempotence, persistance
@@ -62,6 +62,7 @@ function makeRequestsRepo(): ContactRequestsRepository & { rows: Map<string, Kre
         notificationFailure: null,
         notifiedAt: null,
         notificationNextAttemptAt: row.notificationNextAttemptAt,
+        notificationClaimedAt: null,
         dedupKey: row.dedupKey,
       };
       rows.set(created.id, created);
@@ -90,16 +91,30 @@ function makeRequestsRepo(): ContactRequestsRepository & { rows: Map<string, Kre
       rows.set(id, updated);
       return updated;
     },
-    async claimNotificationAttempt(id: string, options: { expectedAttempts: number }) {
+    async claimNotificationAttempt(
+      id: string,
+      options: { expectedAttempts: number; now?: Date },
+    ) {
       const row = rows.get(id);
       if (!row) return null;
       if (row.notificationAttempts !== options.expectedAttempts) return null;
       if (!['pending', 'failed', 'not_configured'].includes(row.notificationStatus)) return null;
+      // Bail (revue sécurité finale) : une tentative en vol n'est pas
+      // re-claimable tant que le bail court.
+      const now = options.now ?? NOW;
+      if (
+        row.notificationClaimedAt !== null &&
+        row.notificationClaimedAt.getTime() > now.getTime() - CONTACT_NOTIFICATION_CLAIM_LEASE_MS
+      ) {
+        return null;
+      }
       const updated: KreizContactRequest = {
         ...row,
         notificationAttempts: row.notificationAttempts + 1,
         notificationStatus: row.notificationStatus === 'not_configured' ? 'pending' : row.notificationStatus,
         notificationFailure: null,
+        notificationClaimedAt: now,
+        notificationNextAttemptAt: new Date(now.getTime() + CONTACT_NOTIFICATION_CLAIM_LEASE_MS),
       };
       rows.set(id, updated);
       return updated;
@@ -113,6 +128,7 @@ function makeRequestsRepo(): ContactRequestsRepository & { rows: Map<string, Kre
         notifiedAt: options.notifiedAt,
         notificationNextAttemptAt: null,
         notificationFailure: null,
+        notificationClaimedAt: null,
       };
       rows.set(id, updated);
       return updated;
@@ -128,6 +144,7 @@ function makeRequestsRepo(): ContactRequestsRepository & { rows: Map<string, Kre
         notificationStatus: 'failed',
         notificationFailure: options.failure,
         notificationNextAttemptAt: options.nextAttemptAt,
+        notificationClaimedAt: null,
       };
       rows.set(id, updated);
       return updated;
@@ -135,10 +152,19 @@ function makeRequestsRepo(): ContactRequestsRepository & { rows: Map<string, Kre
     async rearmNotification(id: string, options: { now?: Date } = {}) {
       const row = rows.get(id);
       if (!row || row.notificationStatus === 'sent') return null;
+      // Bail (revue sécurité finale) : pas de ré-armage pendant un envoi en vol.
+      const now = options.now ?? NOW;
+      if (
+        row.notificationClaimedAt !== null &&
+        row.notificationClaimedAt.getTime() > now.getTime() - CONTACT_NOTIFICATION_CLAIM_LEASE_MS
+      ) {
+        return null;
+      }
       const updated: KreizContactRequest = {
         ...row,
         notificationAttempts: 0,
-        notificationNextAttemptAt: options.now ?? NOW,
+        notificationNextAttemptAt: now,
+        notificationClaimedAt: null,
         notificationStatus: row.notificationStatus === 'not_configured' ? 'pending' : row.notificationStatus,
       };
       rows.set(id, updated);
@@ -168,6 +194,17 @@ function makeRequestsRepo(): ContactRequestsRepository & { rows: Map<string, Kre
         promoted += 1;
       }
       return promoted;
+    },
+    async purgeHandledCreatedBefore(before: Date, options: { totalCap?: number } = {}) {
+      let purged = 0;
+      for (const row of [...rows.values()]) {
+        if (purged >= (options.totalCap ?? 10_000)) break;
+        if (row.status === 'handled' && row.createdAt < before) {
+          rows.delete(row.id);
+          purged += 1;
+        }
+      }
+      return purged;
     },
   };
   return repo as ContactRequestsRepository & typeof repo;

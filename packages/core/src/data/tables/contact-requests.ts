@@ -48,6 +48,16 @@ export const contactRequests = pgTable(
     notificationFailure: jsonb('notification_failure').$type<KreizContactNotificationFailure | null>(),
     notifiedAt: timestamp('notified_at', { withTimezone: true }),
     notificationNextAttemptAt: timestamp('notification_next_attempt_at', { withTimezone: true }),
+    /**
+     * **Bail de claim** (revue sécurité finale) : horodatage de la dernière
+     * réservation d'envoi. Non nul = une tentative est **en vol** — ni
+     * ré-armable (double-clic admin) ni re-claimable (balayage concurrent)
+     * tant que le bail (`CONTACT_NOTIFICATION_CLAIM_LEASE_MS`) court.
+     * Distinct de `notification_next_attempt_at`, qui porte le **backoff**
+     * d'échec (une relance admin explicite passe outre le backoff, jamais
+     * outre un envoi en vol). Nettoyé à la résolution (sent/failed).
+     */
+    notificationClaimedAt: timestamp('notification_claimed_at', { withTimezone: true }),
     dedupKey: text('dedup_key'),
   },
   (table) => [

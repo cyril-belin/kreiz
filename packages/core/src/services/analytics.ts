@@ -15,6 +15,7 @@ import {
   type AnalyticsDashboardPeriod,
 } from '../domain/analytics/policy.js';
 import { pseudonymizeIp } from './auth-tokens.js';
+import { RATE_LIMIT_PURGE_AFTER_MS } from '../domain/auth.js';
 
 /**
  * Service analytics (slice 8) — orchestration de la collecte et du
@@ -174,13 +175,26 @@ export function createAnalyticsService(deps: AnalyticsServiceDeps) {
   /**
    * Purge par rétention — événements plus vieux que `config.retentionDays`.
    * Appelée opportunistiquement par la page admin analytics et disponible
-   * pour un cron futur ; aucun scheduler obligatoire.
+   * pour un cron futur ; aucun scheduler obligatoire. Purge aussi les
+   * compteurs de rate limiting échus (revue sécurité finale) : les clés
+   * analytics sont créées à cardinalité contrôlée par le client (IP forgée
+   * hors plateforme de confiance, rotation IPv6) — sans purge régulière, la
+   * table grossit sans borne sur un site attaqué et ne bénéficiait jusque là
+   * que des échecs de login admin.
    */
   async function runRetention(options: { now?: Date } = {}): Promise<{ deleted: number } | null> {
     if (!config.enabled) return null;
     const now = options.now ?? new Date();
     const cutoff = new Date(now.getTime() - config.retentionDays * 24 * 60 * 60 * 1000);
-    return { deleted: await events.purgeOlderThan(cutoff) };
+    const deleted = await events.purgeOlderThan(cutoff);
+    // Best-effort : un échec de purge des compteurs ne doit pas faire échouer
+    // la purge de rétention (bornée côté repository, silencieuse ici).
+    try {
+      await rateLimits.purgeExpired(new Date(now.getTime() - RATE_LIMIT_PURGE_AFTER_MS));
+    } catch {
+      // ignoré — la prochaine exécution retentera
+    }
+    return { deleted };
   }
 
   /** Dashboard admin — agrégations SQL bornées, périodes 7/30/90 jours. */

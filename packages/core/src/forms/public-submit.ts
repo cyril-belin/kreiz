@@ -14,6 +14,7 @@ import {
 import { isTrustedSameSiteMutation } from '../http/mutations.js';
 import { clientIpFromHeaders } from '../http/admin-login.js';
 import { analyticsPageFromReferer } from '../analytics/collect.js';
+import { CONTACT_BODY_MAX_BYTES } from '../domain/forms/policy.js';
 
 /**
  * Endpoint public de soumission — `/api/forms/[key]` (cadrage §5 : les
@@ -56,11 +57,29 @@ export const POST: APIRoute = async (ctx) => {
 
   let formData: FormData;
   try {
-    formData = await ctx.request.formData();
+    // Borne de transport avant tout bufferisation (revue sécurité finale) :
+    // Content-Length d'abord, puis lecture plafonnée en streaming — un corps
+    // géant (multipart hostile) n'atteint jamais `formData()`, qui bufferise
+    // tout en mémoire. La charge utile légitime est agrégée à 32 KiB : la
+    // marge (1 MiB) ne rejette jamais un vrai formulaire.
+    const contentLength = Number(ctx.request.headers.get('content-length') ?? '0');
+    if (Number.isFinite(contentLength) && contentLength > CONTACT_BODY_MAX_BYTES) {
+      throw new Error('body-too-large');
+    }
+    const boundedBody = await readBodyCapped(ctx.request, CONTACT_BODY_MAX_BYTES);
+    if (boundedBody === null) {
+      throw new Error('body-too-large');
+    }
+    formData = await new Request(ctx.request.url, {
+      method: 'POST',
+      headers: ctx.request.headers,
+      body: boundedBody,
+      duplex: 'half',
+    } as RequestInit).formData();
   } catch {
     return contactStandalonePage({
       title: 'Requête invalide',
-      bodyHtml: '<p class="kz-form__error">Requête invalide.</p>',
+      bodyHtml: '<p class="kz-form__error">Requête invalide ou trop volumineuse.</p>',
       status: 400,
     });
   }
@@ -131,4 +150,33 @@ export const GET: APIRoute = async () => {
 
 function escapeText(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+/**
+ * Lecture du corps **plafonnée en streaming** (octets bruts — le multipart
+ * peut être binaire) : au-delà du cap, la lecture est annulée immédiatement
+ * (`null`) — un corps géant n'est jamais bufferisé en entier.
+ */
+async function readBodyCapped(request: Request, capBytes: number): Promise<Uint8Array | null> {
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > capBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const assembled = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    assembled.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return assembled;
 }

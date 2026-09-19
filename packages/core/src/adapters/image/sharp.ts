@@ -75,6 +75,20 @@ export function createSharpImageTransformer(): ImageTransformer {
           .toBuffer();
         produced.push({ width: spec.width, format: spec.format, data: new Uint8Array(buffer) });
       }
+      // Source plus étroite que la plus petite variante (revue sécurité
+      // finale) : sans ce repli, l'image devenait `ready` avec **zéro**
+      // variante — publiable, puis silencieusement invisible partout (le
+      // rendu n'a jamais d'original privé à servir). Une unique variante à
+      // la largeur naturelle est produite : ré-encodée, metadata nettoyées,
+      // sans upscale — l'original privé n'est jamais servi tel quel.
+      if (produced.length === 0) {
+        const fallbackFormat = variants[0]?.format ?? 'webp';
+        const buffer = await Sharp(oriented.data, { limitInputPixels: MEDIA_MAX_PIXELS })
+          .resize({ width: originalWidth, withoutEnlargement: true })
+          .toFormat(toSharpFormat(fallbackFormat), formatOptions(fallbackFormat))
+          .toBuffer();
+        produced.push({ width: originalWidth, format: fallbackFormat, data: new Uint8Array(buffer) });
+      }
 
       return {
         original: {

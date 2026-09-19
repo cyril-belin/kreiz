@@ -4,11 +4,13 @@ import { createAdminUsersRepository } from '../../src/data/repositories/admin-us
 import type { KreizAdminUser } from '../../src/data';
 import { createContentTypeRegistry } from '../../src/domain/content/registry';
 import { fields } from '../../src/domain/content/fields';
-import { ContentDataCorruptedError } from '../../src/domain/content/errors';
+import { ContentConcurrentModificationError, ContentDataCorruptedError } from '../../src/domain/content/errors';
 import { createContentService, CONTENT_AUDIT_ACTIONS } from '../../src/services/content';
+import { createPublicationService } from '../../src/services/publication';
 import { createContentEntriesRepository } from '../../src/data/repositories/content-entries';
 import { createMediaRepository } from '../../src/data/repositories/media';
 import { createAdminAuditLogRepository } from '../../src/data/repositories/admin-audit-log';
+import { createRedirectsRepository } from '../../src/data/repositories/redirects';
 import {
   describeIntegration,
   expectPgError,
@@ -31,6 +33,7 @@ const emailPattern = `it-${runId}%@example.test`;
 
 let harness: IntegrationHarness;
 let service: ReturnType<typeof createContentService>;
+let publication: ReturnType<typeof createPublicationService>;
 let entriesRepo: ReturnType<typeof createContentEntriesRepository>;
 let admin: KreizAdminUser;
 let secondAdmin: KreizAdminUser;
@@ -72,6 +75,15 @@ describeIntegration('moteur de contenu — service + PostgreSQL réel', () => {
     service = createContentService({
       entries: entriesRepo,
       media: createMediaRepository(harness.db),
+      audit: createAdminAuditLogRepository(harness.db),
+      registry,
+      rebuild: createRebuildTriggerStub(),
+      mediaPublicBaseUrl: 'https://media.example.test/cdn',
+    });
+    publication = createPublicationService({
+      entries: entriesRepo,
+      media: createMediaRepository(harness.db),
+      redirects: createRedirectsRepository(harness.db),
       audit: createAdminAuditLogRepository(harness.db),
       registry,
       rebuild: createRebuildTriggerStub(),
@@ -174,6 +186,140 @@ describeIntegration('moteur de contenu — service + PostgreSQL réel', () => {
     ]);
     expect(auditRows[0]?.actor_admin_id).toBe(admin.id);
     expect(auditRows[1]?.actor_admin_id).toBe(secondAdmin.id);
+  });
+
+  it('concurrence optimiste (passe de fermeture) : deux éditeurs — le premier gagne, le second reçoit ContentConcurrentModificationError, rien n’est écrasé', async () => {
+    const created = await service.createDraft({
+      contentTypeKey: 'article',
+      title: 'Concurrence',
+      data: { excerpt: 'Accroche', body: 'Corps.' },
+      actorAdminId: admin.id,
+      slug: 'concurrence-optimiste',
+    });
+    if (created.kind !== 'created') throw new Error('attendu created');
+    const entryId = created.entry.id;
+
+    // Les deux éditeurs ouvrent la même version.
+    const openedByA = await entriesRepo.findById(entryId);
+    const openedByB = await entriesRepo.findById(entryId);
+    expect(openedByA!.updatedAt).toEqual(openedByB!.updatedAt);
+
+    // B enregistre en premier (garde active, version fraîche) → gagne.
+    const bOutcome = await service.updateDraft({
+      entryId,
+      title: 'Version de B',
+      data: { excerpt: 'Accroche B', body: 'Corps B.' },
+      expectedUpdatedAt: openedByB!.updatedAt.toISOString(),
+      actorAdminId: secondAdmin.id,
+    });
+    expect(bOutcome.kind).toBe('updated');
+
+    // A enregistre ensuite avec la version OBSOLÈTE → conflit explicite.
+    await expect(
+      service.updateDraft({
+        entryId,
+        title: 'Version périmée de A',
+        data: { excerpt: 'Accroche A', body: 'Corps A.' },
+        expectedUpdatedAt: openedByA!.updatedAt.toISOString(),
+        actorAdminId: admin.id,
+      }),
+    ).rejects.toThrow(ContentConcurrentModificationError);
+    // Rien n'a été écrasé : la version de B fait foi.
+    expect((await entriesRepo.findById(entryId))!.title).toBe('Version de B');
+
+    // A recharge puis reporte avec la version fraîche → réussit.
+    const fresh = await entriesRepo.findById(entryId);
+    const retry = await service.updateDraft({
+      entryId,
+      title: 'Version reportée de A',
+      data: { excerpt: 'Accroche A2', body: 'Corps A2.' },
+      expectedUpdatedAt: fresh!.updatedAt.toISOString(),
+      actorAdminId: admin.id,
+    });
+    expect(retry.kind).toBe('updated');
+
+    // Version non parsable → conflit immédiat (état altéré, jamais une écriture).
+    await expect(
+      service.updateDraft({
+        entryId,
+        title: 'Jamais écrit',
+        data: { excerpt: 'x', body: 'y' },
+        expectedUpdatedAt: 'pas-une-date',
+        actorAdminId: admin.id,
+      }),
+    ).rejects.toThrow(ContentConcurrentModificationError);
+    expect((await entriesRepo.findById(entryId))!.title).toBe('Version reportée de A');
+
+    // Sans garde (flows historiques) : écriture inconditionnelle conservée.
+    const legacy = await service.updateDraft({
+      entryId,
+      title: 'Sans garde',
+      data: { excerpt: 'x', body: 'y' },
+      actorAdminId: admin.id,
+    });
+    expect(legacy.kind).toBe('updated');
+  });
+
+  it('microsecondes timestamptz (passe de fermeture) : une version rendue à la ms passe la garde même si la base garde des µs', async () => {
+    const created = await service.createDraft({
+      contentTypeKey: 'article',
+      title: 'Microsecondes',
+      data: { excerpt: 'A.', body: 'B.' },
+      actorAdminId: admin.id,
+      slug: 'microsecondes',
+    });
+    if (created.kind !== 'created') throw new Error('attendu created');
+    const entryId = created.entry.id;
+    // Écriture **SQL directe** : `now()` PostgreSQL porte des microsecondes
+    // que la Date JS perd à la lecture du formulaire.
+    await harness.raw(sql`update kreiz_content_entries set updated_at = now() where id = ${entryId}`);
+    const rendered = await entriesRepo.findById(entryId);
+    const renderedIso = rendered!.updatedAt.toISOString();
+    const outcome = await service.updateDraft({
+      entryId,
+      title: 'Sauvegarde après lecture µs',
+      data: { excerpt: 'A2.', body: 'B2.' },
+      expectedUpdatedAt: renderedIso,
+      actorAdminId: admin.id,
+    });
+    expect(outcome.kind).toBe('updated');
+  });
+
+  it('Save ≠ Publish intact (passe de fermeture) : un Publish après un Save concurrent publie l’état courant en base, jamais un état client obsolète', async () => {
+    const created = await service.createDraft({
+      contentTypeKey: 'article',
+      title: 'Publish concurrent',
+      data: { excerpt: 'Accroche', body: 'Corps.' },
+      actorAdminId: admin.id,
+      slug: 'publish-concurrent',
+    });
+    if (created.kind !== 'created') throw new Error('attendu created');
+    const entryId = created.entry.id;
+
+    // A "ouvre" une page (version v1), B enregistre une nouvelle version v2,
+    // A publie : Publish ne transporte AUCUNE donnée de formulaire — il
+    // publie l'état courant en base (v2). Rien de périmé ne peut être
+    // publié, et la v2 reste dans le brouillon quel que soit le snapshot.
+    const v1 = await entriesRepo.findById(entryId);
+    await service.updateDraft({
+      entryId,
+      title: 'Version publiée (v2)',
+      data: { excerpt: 'Accroche v2', body: 'Corps v2.' },
+      actorAdminId: secondAdmin.id,
+    });
+    const published = await publication.publishContent({ entryId, actorAdminId: admin.id });
+    expect(published.kind).toBe('published');
+    if (published.kind !== 'published') return;
+    // Le snapshot porte bien l'état courant (v2), pas un hypothétique état v1.
+    expect(published.entry.publishedTitle).toBe('Version publiée (v2)');
+    expect(published.entry.publishedSlug).toBe('publish-concurrent');
+    // La garde Save n'empêche pas le Publish (aucun expectedUpdatedAt en jeu).
+    expect(v1).not.toBeNull();
+
+    // Nettoyage immédiat : le contenu publié doit sortir des lectures
+    // publiques sans attendre l'afterAll — le build Astro des tests
+    // d'intégration parallèles lit les lignes publiées vivantes.
+    await service.deleteDraft({ entryId, actorAdminId: admin.id });
   });
 
   it('l’index unique partiel protège la collision — même après vérification préalable', async () => {

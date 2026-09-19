@@ -69,6 +69,12 @@ export function createWebhookMailer(options: {
             subject: email.subject,
             text: email.text,
           }),
+          // Jamais suivre une redirection (revue sécurité finale) : le corps
+          // POST porte des PII visiteur et l'en-tête un token porteur — un
+          // relais qui répond 3xx (compromis, mal configuré) ne doit pouvoir
+          // ni rediriger la charge vers un autre hôte, ni la faire retomber
+          // en HTTP clair. Le statut 3xx est traité comme un refus du relais.
+          redirect: 'manual',
           signal: AbortSignal.timeout(timeoutMs),
         });
       } catch {

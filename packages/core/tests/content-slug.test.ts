@@ -68,4 +68,13 @@ describe('suffixage', () => {
   it('repli non vide pour un titre sans caractère sluggable', () => {
     expect(slugify('??') || SLUG_FALLBACK).toBe('contenu');
   });
+
+  it('les candidats suffixés respectent SLUG_MAX_LENGTH (revue sécurité finale)', () => {
+    const base = 'a'.repeat(SLUG_MAX_LENGTH);
+    for (const candidate of [...slugCandidates(base)].slice(0, 10)) {
+      expect(candidate.length).toBeLessThanOrEqual(SLUG_MAX_LENGTH);
+    }
+    // La base tronquée reste suffixée lisiblement.
+    expect([...slugCandidates(base)][1]).toBe(`${'a'.repeat(SLUG_MAX_LENGTH - 2)}-2`);
+  });
 });

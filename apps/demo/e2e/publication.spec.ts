@@ -294,6 +294,10 @@ test.describe('back-office — publication et rebuild (slice 4)', () => {
     page,
   }) => {
     await resetHookCaptures();
+    // Anti-tempête (revue sécurité finale) : le rebuild manuel est plafonné à
+    // un par minute — la spec précédente vient d'en déclencher un, on purge le
+    // compteur global pour rendre ce test déterministe.
+    await query(`delete from kreiz_rate_limits where key like 'kreiz:rebuild-manual%'`);
     await login(page);
     // Le dashboard expose l'état du moteur de rebuild configuré.
     await expect(page.getByText('automatique (deploy hook Vercel)')).toBeVisible();

@@ -278,6 +278,8 @@ describe('environnement admin runtime', () => {
       secret: validEnv.KREIZ_SECRET,
       storage: null,
       rebuildHookUrl: null,
+      maintenanceToken: null,
+      contactRetentionDays: null,
       mail: null,
     });
   });

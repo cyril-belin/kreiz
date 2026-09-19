@@ -44,9 +44,9 @@ const migrationFiles = readdirSync(drizzleDir)
   .filter((name) => name.endsWith('.sql'))
   .sort();
 const LAST = migrationFiles.at(-1);
-if (LAST && !LAST.startsWith('0005')) {
+if (LAST && !LAST.startsWith('0007')) {
   throw new Error(
-    `@kreiz/core : la dernière migration attendue pour ce test est 0005 — trouvé « ${LAST} ». Mettre à jour analytics-migration.test.ts.`,
+    `@kreiz/core : la dernière migration attendue pour ce test est 0007 — trouvé « ${LAST} ». Mettre à jour analytics-migration.test.ts.`,
   );
 }
 

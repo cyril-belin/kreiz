@@ -1,4 +1,4 @@
-import { ANALYTICS_CTA_ID_MAX_LENGTH, normalizeCtaId } from '../domain/analytics/policy.js';
+import { normalizeCtaId } from '../domain/analytics/policy.js';
 
 /**
  * Instrumentation CTA (slice 8) — attribut `data-kz-cta` posé par le beacon
@@ -9,8 +9,11 @@ import { ANALYTICS_CTA_ID_MAX_LENGTH, normalizeCtaId } from '../domain/analytics
 
 export const ANALYTICS_CTA_ATTRIBUTE = 'data-kz-cta';
 
-/** Attributs à délayer sur l'élément CTA — identifiant borné et assaini. */
+/** Attributs à délayer sur l'élément CTA — identifiant borné et assaini.
+ * Un id non normalisable (vide, caractères de contrôle, trop long) ne
+ * produit **aucun** attribut (revue sécurité finale : jamais de valeur
+ * brute non assainie délayée dans le DOM du Project). */
 export function analyticsCtaAttributes(id: string): Record<string, string> {
-  const value = normalizeCtaId(id) ?? id.slice(0, ANALYTICS_CTA_ID_MAX_LENGTH);
-  return { [ANALYTICS_CTA_ATTRIBUTE]: value };
+  const value = normalizeCtaId(id);
+  return value === null ? {} : { [ANALYTICS_CTA_ATTRIBUTE]: value };
 }

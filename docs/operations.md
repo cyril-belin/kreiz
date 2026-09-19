@@ -50,18 +50,49 @@ de contact, retry média depuis la médiathèque, rebuild manuel depuis le
 dashboard. Le parcours « panne transport → relance admin → livré » est
 prouvé par l'E2E global (`e2e/core-recovery.spec.ts`).
 
-**Cron externe — résumé des tâches à planifier :**
+### 3.1 Endpoint de maintenance — `POST /api/maintenance` (livré en passe de fermeture)
 
-1. `processStuckMedia` (horaire) et `retryFailedMedia` (2×/jour) ;
-2. `runNotificationRecovery` (30 min) ;
-3. `runRetention` (quotidien) ;
-4. optionnel : purge des sessions expirées / rate limits (les guards les
-   ignorent de toute façon).
+Le Core livre désormais le déclencheur attendu par le cron externe : un
+endpoint unique qui enchaîne les recoveries ci-dessus **sans dupliquer
+aucune logique métier** (il appelle les services, rien de plus).
 
-Ces fonctions sont des méthodes de services composés par le runtime du
-Core — un Project V1 les expose à un cron en montant un endpoint
-protégé dédié (à construire côté Project) ou en appelant le service depuis
-un script signé.
+- **Authentification** : `Authorization: Bearer $KREIZ_MAINTENANCE_TOKEN`
+  (≥ 32 caractères), comparaison temps constant. **Sans la variable, toute
+  requête reçoit un 503 et rien ne s'exécute** — en production, l'absence
+  du token empêche la maintenance. Faux token → 401 sans indice.
+  `POST` uniquement (GET → 405) ; jamais de session admin navigateur.
+  **Contrat HTTP** : le POST doit porter un `content-type`
+  (ex. `application/json`) — le `checkOrigin` natif d'Astro refuse un POST
+  « nu » sans en-tête `Origin` (403), et un cron n'en envoie pas : avec un
+  content-type JSON, la requête atteint la garde bearer comme prévu.
+- **Réponse** : compteurs techniques uniquement — `contactNotification`
+  (promoted/sent/failed/skipped), `contactRetention` (purged ou
+  `disabled:true` si `KREIZ_CONTACT_RETENTION_DAYS` est absente),
+  `mediaStuck` (recovered ou `unavailable:true` sans stockage),
+  `analyticsRetention` (deleted — purge aussi les compteurs rate limits
+  échus). Aucune PII, aucun secret.
+- **Idempotence** : totale (claims conditionnels, purges bornées) — deux
+  appels rapprochés sont sûrs ; le second trouve rarement du travail.
+- **Fréquences recommandées** (Vercel Cron, une seule entrée suffit) :
+  **toutes les 30 minutes** couvre la contrainte la plus serrée (contact
+  recovery) et reste conservative pour les autres. Granularité Vercel
+  limitée (pas de cron horaire exact en plan gratuit) : un appel toutes les
+  30 min ou toutes les heures est acceptable — compromis documenté : plus
+  fréquent = notifications relancées plus tôt ; moins fréquent = retries
+  média plus lents. `retryFailedMedia` n'est **pas** câblé dans l'endpoint :
+  aucun budget de tentatives n'existe en V1, un fichier intrinsèquement
+  invalide bouclerait indéfiniment — le retry reste une action admin
+  explicite (médiathèque).
+- **Vercel Cron** (dans `vercel.json` du Project) :
+  `{ "crons": [{ "path": "/api/maintenance", "schedule": "*/30 * * * *" }] }`.
+  Vercel Cron appelle en GET : utiliser un petit wrapper Project ou un
+  déclencheur externe capable de POSTer avec l'en-tête Bearer (GitHub
+  Action schedulée, cron système + curl, uptimerobot type service). Le
+  endpoint reste en 405 sur GET par refus de principe — aucun effet de bord
+  n'est accessible sans POST authentifié.
+- **Rotation du token** : changer `KREIZ_MAINTENANCE_TOKEN` dans
+  l'environnement et redéployer ; les appels en cours avec l'ancien token
+  reçoivent 401 immédiatement (aucune session à invalider).
 
 ## 4. Médias / stockage
 
@@ -70,6 +101,14 @@ un script signé.
   `KREIZ_STORAGE_PUBLIC_BASE_URL` (CDN recommandé).
 - CORS du bucket : PUT autorisé depuis le domaine admin (config de
   référence dans `docs/slices/slice-5.md`).
+- **CSP du Project (revue sécurité finale)** : l'upload direct navigateur →
+  stockage est un `fetch`/XHR cross-origin, et les variantes sont des
+  `<img>` CDN — la CSP du Project **doit** porter `connect-src 'self'
+  <origine du endpoint storage>` et `img-src … <origine du CDN public>`,
+  dérivées de `KREIZ_STORAGE_ENDPOINT` / `KREIZ_STORAGE_PUBLIC_BASE_URL`.
+  Pattern de référence : `apps/demo/astro.config.ts`. Sans cela, la
+  production casse silencieusement les médias (l'E2E tourne en dev, où la
+  CSP n'est pas appliquée).
 - Suppression : refusée si le média est référencé (couverture courante ou
   snapshot publié) ; un média libre part avec ses objets. La suppression
   DB/stockage n'est pas atomique (voir

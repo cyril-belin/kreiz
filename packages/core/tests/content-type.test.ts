@@ -73,6 +73,20 @@ describe('defineContentType — déclarations invalides (fail fast)', () => {
     ).toThrow(/namespace de route invalide/);
   });
 
+  it('rejette les namespaces réservés au Core (revue sécurité finale)', () => {
+    for (const namespace of ['admin', 'api']) {
+      expect(() =>
+        defineContentType({
+          key: 'article',
+          label: 'Article',
+          routeNamespace: namespace,
+          fields: {},
+          template: 't.astro',
+        }),
+      ).toThrow(/namespace de route réservé/);
+    }
+  });
+
   it('rejette un template manquant', () => {
     expect(() =>
       defineContentType({

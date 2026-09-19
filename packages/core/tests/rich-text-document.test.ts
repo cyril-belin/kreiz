@@ -249,6 +249,17 @@ describe('parseRichTextDocument — bornes défensives (slice 6 §21)', () => {
     expectCode(() => parseRichTextDocument(doc([block])), 'depth-exceeded');
   });
 
+  it('arbre ~1000 niveaux : erreur de domaine, jamais un RangeError de pile (revue sécurité finale)', () => {
+    // Sous la borne de taille (256 KiB) mais au-delà de ce que la récursion
+    // Zod tolère : le pré-scan itératif rejette avec `depth-exceeded` avant
+    // d'entrer dans le schéma — pas de débordement de pile (500 brut).
+    let block: RichTextBlockNode = paragraph('fond');
+    for (let index = 0; index < 1_000; index += 1) {
+      block = { type: 'blockquote', content: [block] };
+    }
+    expectCode(() => parseRichTextDocument(doc([block])), 'depth-exceeded');
+  });
+
   it('accepte une imbrication profonde mais dans la limite', () => {
     let block: RichTextBlockNode = paragraph('fond');
     for (let index = 0; index < RICH_TEXT_MAX_DEPTH - 1; index += 1) {

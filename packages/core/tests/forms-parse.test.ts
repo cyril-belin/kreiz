@@ -140,4 +140,15 @@ describe('renderContactFormWithErrors — re-rendu serveur', () => {
     });
     expect(html).toContain('name="form_token"');
   });
+
+  it('caractères non stockables en JSONB (NUL, substituts isolés) rejetés en validation — jamais un 500 (revue sécurité finale)', () => {
+    // PostgreSQL refuse \u0000 et les substituts non appariés en jsonb
+    // (erreur 22021) : sans garde de schéma, la soumission 500 au lieu de
+    // renvoyer une erreur de champ propre.
+    const schema = form.payloadSchema;
+    expect(schema.safeParse({ name: 'Alice\u0000B', email: 'a@b.test', consent: true }).success).toBe(false);
+    expect(schema.safeParse({ name: 'A\uD800B', email: 'a@b.test', consent: true }).success).toBe(false);
+    // CRLF reste légitime dans un champ texte multiligne.
+    expect(schema.safeParse({ name: 'Alice', email: 'a@b.test', consent: true }).success).toBe(true);
+  });
 });

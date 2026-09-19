@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { drizzle as drizzleNodePg } from 'drizzle-orm/node-postgres';
 import type { SQL } from 'drizzle-orm';
 import pg from 'pg';
-import { describe } from 'vitest';
+import { describe, it } from 'vitest';
 import { createKreizDatabase, type KreizDatabase } from '../../src/data/connection';
 
 /**
@@ -189,7 +189,51 @@ export async function expectPgError(run: () => Promise<unknown>, code: string): 
   throw new Error(`Erreur PostgreSQL ${code} attendue — aucune levée`);
 }
 
-/** Gate commun aux fichiers d'intégration. */
+/** Gate commun aux fichiers d'intégration.
+ *
+ * Trois comportements (passe de fermeture — plus jamais de faux vert) :
+ * - base configurée → les tests tournent ;
+ * - base absente hors job d'intégration (local, job `quality` des forks)
+ *   → skip silencieux, comme toujours — les unitaires restent jouables
+ *   sans PostgreSQL et `quality` ne demande aucun secret ;
+ * - base absente **dans le job d'intégration** (`KREIZ_REQUIRE_INTEGRATION_DB=1`,
+ *   posé uniquement par le workflow CI sur ce job) → les fichiers échouent
+ *   bruyamment : le job doit prouver que les tests PostgreSQL/Neon ont
+ *   réellement tourné, jamais passer parce que la base n'a pas été créée.
+ *   (On ne se fie pas à `CI=true` : GitHub le pose aussi dans `quality`,
+ *   qui doit rester vert sans secrets.)
+ */
+export type IntegrationGate = 'run' | 'skip' | 'fail';
+
+export function resolveIntegrationGate(
+  mode: IntegrationMode | null,
+  env: { requireDb?: string | undefined } = {},
+): IntegrationGate {
+  if (mode) return 'run';
+  return env.requireDb === '1' ? 'fail' : 'skip';
+}
+
 export function describeIntegration(name: string, fn: () => void): void {
-  describe.skipIf(!integrationMode)(name, fn);
+  const gate = resolveIntegrationGate(integrationMode, {
+    requireDb: process.env.KREIZ_REQUIRE_INTEGRATION_DB,
+  });
+  if (gate === 'run') {
+    describe(name, fn);
+    return;
+  }
+  if (gate === 'fail') {
+    describe(name, () => {
+      it(
+        'base de test requise — KREIZ_DATABASE_URL ou KREIZ_TEST_DATABASE_URL absente en CI',
+        () => {
+          throw new Error(
+            'Tests d’intégration sans base en CI : la suite doit échouer, jamais sauter ' +
+              'silencieusement (configure KREIZ_DATABASE_URL/KREIZ_TEST_DATABASE_URL dans le job).',
+          );
+        },
+      );
+    });
+    return;
+  }
+  describe.skip(name, fn);
 }

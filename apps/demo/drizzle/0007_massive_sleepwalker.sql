@@ -1,0 +1,1 @@
+ALTER TABLE "kreiz_contact_requests" ADD COLUMN "notification_claimed_at" timestamp with time zone;

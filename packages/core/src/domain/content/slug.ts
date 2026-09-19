@@ -79,7 +79,15 @@ export function normalizeSlugInput(input: string): string {
 export function* slugCandidates(base: string): Generator<string> {
   let suffix = 1;
   while (suffix <= SLUG_MAX_SUFFIX_ATTEMPTS + 1) {
-    yield suffix === 1 ? base : `${base}-${suffix}`;
+    // La base est bornée par `slugify`, mais le suffixe la rallonge : on
+    // tronque la partie variable pour respecter `SLUG_MAX_LENGTH` (cohérence
+    // avec la borne des slugs saisis manuellement — revue sécurité finale).
+    if (suffix === 1) {
+      yield base;
+    } else {
+      const stem = base.slice(0, SLUG_MAX_LENGTH - String(suffix).length - 1).replace(/-+$/g, '');
+      yield `${stem}-${suffix}`;
+    }
     suffix += 1;
   }
 }

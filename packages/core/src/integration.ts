@@ -32,6 +32,7 @@ import {
   PUBLIC_ANALYTICS_BEACON_PATTERN,
   PUBLIC_ANALYTICS_EVENT_PATTERN,
   PUBLIC_FORM_SUBMIT_PATTERN,
+  PUBLIC_MAINTENANCE_PATTERN,
   PUBLIC_ROBOTS_PATH,
   PUBLIC_SITEMAP_PATH,
 } from './http/admin-routes.js';
@@ -84,6 +85,21 @@ export function kreiz(input?: KreizConfigInput): AstroIntegration {
     hooks: {
       'astro:config:setup': async ({ injectRoute, updateConfig, config: astroConfig }) => {
         const projectRoot = fileURLToPath(astroConfig.root);
+
+        // Précondition (passe de fermeture — diagnostic DX) : le Core
+        // injecte des routes SSR (`prerender: false`, back-office compris)
+        // qui exigent un **adapter** Astro pour être servies à la demande.
+        // Sans adapter, l'échec survient tard et de façon cryptique (routes
+        // absentes du build, 404 déroutants) — on refuse tôt et clairement,
+        // sans imposer un adapter particulier (Vercel, Node, Netlify…).
+        if (!astroConfig.adapter) {
+          throw new Error(
+            "@kreiz/core : aucun adapter Astro n'est configuré — le Core injecte des routes " +
+              'SSR (back-office /admin, endpoints /api) qui exigent un adapter ' +
+              "(ex. `adapter: vercel()` dans `defineConfig`). Ajoutez-en un dans astro.config, ou " +
+              'n\'installez pas @kreiz/core si le projet n\'a pas de back-office.',
+          );
+        }
 
         // Redirections de publication — build-time uniquement, avant toute
         // autre configuration. Une base injoignable échoue explicitement
@@ -267,6 +283,16 @@ export function kreiz(input?: KreizConfigInput): AstroIntegration {
         injectRoute({
           pattern: PUBLIC_FORM_SUBMIT_PATTERN,
           entrypoint: fileURLToPath(new URL('./forms/public-submit.js', import.meta.url)),
+          prerender: false,
+        });
+
+        // Maintenance (passe de fermeture) — endpoint du cron externe.
+        // Hors /admin, sans session admin : bearer token machine-to-machine
+        // (`KREIZ_MAINTENANCE_TOKEN`, refus par défaut). Liste
+        // PUBLIC_ROUTE_PATTERNS (garde mécanique).
+        injectRoute({
+          pattern: PUBLIC_MAINTENANCE_PATTERN,
+          entrypoint: fileURLToPath(new URL('./maintenance/route.js', import.meta.url)),
           prerender: false,
         });
 

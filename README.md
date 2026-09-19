@@ -148,12 +148,17 @@ expectations) and [`docs/production-readiness.md`](docs/production-readiness.md)
 
 ## Status
 
-**Pre-release.** Ten development slices plus a security interlude are
-complete and verified (unit, integration on real Neon branches, E2E
-including a global end-to-end journey). A final dedicated security review
-of the complete core is the next step — see
-[`docs/production-readiness.md`](docs/production-readiness.md) before any
-real production use.
+**Pre-release — closing pass complete, CONDITIONALLY READY.** Ten
+development slices plus a security interlude are complete and verified
+(unit, integration on real PostgreSQL/Neon, E2E including a global
+end-to-end journey). The final adversarial security review has been
+performed (GLM), followed by an independent senior review (Claude) —
+neither found a new critical or high vulnerability; the findings that were
+confirmed have been fixed in the working tree. Remaining production
+conditions (contact-requests retention policy, external cron for
+recoveries, Vercel-only IP trust, storage-derived CSP) are listed in
+[`docs/security-review-final.md`](docs/security-review-final.md) and
+[`docs/production-readiness.md`](docs/production-readiness.md).
 
 Baseline: Node 24 LTS · Astro 7 · Tailwind 4 · Neon PostgreSQL + Drizzle ·
 Vercel. Exact versions are locked in `pnpm-lock.yaml`.

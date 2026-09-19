@@ -38,6 +38,15 @@ import { dataSchemaFromFields } from './schema.js';
 export const CONTENT_TYPE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 export const ROUTE_NAMESPACE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Namespaces réservés au Core (revue sécurité finale) : `admin` et `api`
+ * portent le back-office et les endpoints publics — un type de contenu qui
+ * s'y déclarerait projette des pages publiques sous les chemins du cookie
+ * de session (`Path=/admin`) et des routes API. Refus explicite au moment
+ * de la déclaration (erreur de build/démarrage), pas au déploiement.
+ */
+export const RESERVED_ROUTE_NAMESPACES = ['admin', 'api'] as const;
+
 export const CONTENT_TYPE_KEY_MAX_LENGTH = 80;
 export const CONTENT_TYPE_LABEL_MAX_LENGTH = 120;
 export const ROUTE_NAMESPACE_MAX_LENGTH = 80;
@@ -139,6 +148,10 @@ export function validateDeclarationShape(
   ) {
     problems.push(
       `namespace de route invalide « ${String(declaration.routeNamespace)} » (attendu : segments minuscules séparés par des tirets)`,
+    );
+  } else if ((RESERVED_ROUTE_NAMESPACES as readonly string[]).includes(declaration.routeNamespace)) {
+    problems.push(
+      `namespace de route réservé « ${String(declaration.routeNamespace)} » — les espaces « admin » et « api » appartiennent au Core (back-office, endpoints publics)`,
     );
   }
   if (

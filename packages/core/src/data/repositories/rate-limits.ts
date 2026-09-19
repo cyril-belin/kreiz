@@ -61,15 +61,38 @@ export function createRateLimitsRepository(db: KreizDatabase) {
       await db.delete(rateLimits).where(inArray(rateLimits.key, keys));
     },
 
-    /** Purge opportuniste des fenêtres échues (maintenance future ou appelant). */
+    /**
+     * Purge opportuniste des fenêtres échues (maintenance future ou appelant).
+     * **Bornée par lot** (revue sécurité finale) : jamais un `DELETE …
+     * RETURNING` non borné — la table est alimentée par des identités
+     * pseudonymisées dont la cardinalité est contrôlée par le client (IP
+     * forgée, rotation IPv6) ; un flot hostile ne doit pas transformer chaque
+     * purge en transaction géante matérialisant chaque clé en mémoire Node.
+     * Retourne le nombre total supprimé.
+     */
     async purgeExpired(before: Date): Promise<number> {
-      const rows = await db
-        .delete(rateLimits)
-        .where(lt(rateLimits.windowStartedAt, before))
-        .returning({ key: rateLimits.key });
-      return rows.length;
+      let total = 0;
+      for (;;) {
+        const candidates = await db
+          .select({ key: rateLimits.key })
+          .from(rateLimits)
+          .where(lt(rateLimits.windowStartedAt, before))
+          .limit(PURGE_BATCH);
+        if (candidates.length === 0) return total;
+        await db.delete(rateLimits).where(
+          inArray(
+            rateLimits.key,
+            candidates.map((candidate) => candidate.key),
+          ),
+        );
+        total += candidates.length;
+        if (candidates.length < PURGE_BATCH) return total;
+      }
     },
   };
 }
+
+/** Taille de lot des purges bornées. */
+const PURGE_BATCH = 5_000;
 
 export type RateLimitsRepository = ReturnType<typeof createRateLimitsRepository>;

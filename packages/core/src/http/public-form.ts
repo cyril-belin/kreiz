@@ -139,13 +139,21 @@ export function contactStandalonePage(options: {
   status: number;
   retryAfterSeconds?: number;
 }): Response {
+  // Le titre est échappé **dans** le helper (revue sécurité finale) : les
+  // appelants actuels ne passent que des constantes, mais un futur appelant
+  // dérivant le titre d'une entrée visiteur ne doit pas pouvoir y injecter
+  // du HTML sur cette page publique sans CSP.
+  const safeTitle = options.title
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
   const html = `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>${options.title}</title>
+<title>${safeTitle}</title>
 </head>
 <body>
 <main class="kz-form-page">

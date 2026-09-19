@@ -89,7 +89,10 @@ describeIntegration('médias — repository + service sur base réelle', () => {
       media.markProcessing(id, { updatedAt: new Date() }),
       media.markProcessing(id, { updatedAt: new Date() }),
     ]);
-    expect([first !== null, second !== null]).toEqual([true, false]);
+    // Invariant : exactement un gagnant (l'IDENTITÉ du gagnant dépend de
+    // l'ordre d'arrivée au transport — Neon, pont local — et n'est pas le
+    // contrat). L'état final fait foi.
+    expect([first !== null, second !== null].filter(Boolean)).toHaveLength(1);
     expect((await media.findById(id))?.status).toBe('processing');
   });
 

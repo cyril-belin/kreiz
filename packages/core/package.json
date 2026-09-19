@@ -73,7 +73,7 @@
     "@tiptap/extension-link": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "drizzle-orm": "^0.45.2",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.4",
     "zod": "^4.5.4"
   },
   "devDependencies": {

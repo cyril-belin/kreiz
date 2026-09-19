@@ -36,6 +36,7 @@ const newContactRequests = await access.runtime.contact.countNew();
       {rebuildBanner === 'ok' && 'Reconstruction du site demandée — la nouvelle version sera en ligne dès la fin du build.'}
       {rebuildBanner === 'failed' && "La reconstruction a échoué : le dernier site valide reste en ligne. Vous pouvez réessayer."}
       {rebuildBanner === 'unconfigured' && 'Aucun moteur de rebuild n’est configuré : la demande n’a rien déclenché.'}
+      {rebuildBanner === 'cooldown' && 'Une reconstruction vient d’être demandée — réessayez dans une minute (les publications déclenchent automatiquement la leur).'}
     </div>
   )}
 

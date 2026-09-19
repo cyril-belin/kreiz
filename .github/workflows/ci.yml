@@ -113,6 +113,10 @@ jobs:
         if: steps.neon-branch.outputs.url != ''
         env:
           KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
+          # Anti faux vert (passe de fermeture) : dans CE job, une base
+          # absente/non propagée fait échouer les tests — jamais un skip
+          # silencieux. Le job quality (forks sans secrets) reste en skip.
+          KREIZ_REQUIRE_INTEGRATION_DB: '1'
         run: pnpm test:integration
 
       - name: Secret de déploiement éphémère pour l'E2E (rate limiting login)

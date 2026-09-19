@@ -64,7 +64,11 @@ describe('helpers publics', () => {
 
   it('attributs CTA : data-kz-cta typé et borné', () => {
     expect(analyticsCtaAttributes('hero-demo')).toEqual({ 'data-kz-cta': 'hero-demo' });
-    const value = analyticsCtaAttributes('x'.repeat(200))['data-kz-cta'] ?? '';
-    expect(value.length).toBeLessThanOrEqual(64);
+    // Revue sécurité finale : un id non normalisable (contrôle, vide) ne
+    // produit AUCUN attribut — jamais de valeur brute délayée dans le DOM.
+    // Un id trop long est tronqué puis assaini par la normalisation même.
+    const truncated = analyticsCtaAttributes('x'.repeat(200))['data-kz-cta'] ?? '';
+    expect(truncated.length).toBeLessThanOrEqual(64);
+    expect(analyticsCtaAttributes('a\u0000b')).toEqual({});
   });
 });

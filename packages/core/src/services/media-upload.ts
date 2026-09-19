@@ -179,7 +179,21 @@ export function createMediaUploadService(deps: MediaUploadServiceDeps) {
 
       // Type réel par magic bytes (mission §5) — l'objet fait foi sur le
       // mime stocké : une extension mensongère n'existe plus à ce stade.
-      const bytes = await storage.read(found.storageKey);
+      // Lecture plafonnée (revue sécurité finale) : l'URL présignée ne lie
+      // pas le corps — l'objet peut avoir été réécrit depuis le `head`. Un
+      // objet plus grand que la borne (Content-Length mensonger ou stream
+      // tronqué) est un refus propre, jamais un 500 ni un buffer géant.
+      let bytes: Uint8Array | null;
+      try {
+        bytes = await storage.read(found.storageKey, { maxBytes: MEDIA_MAX_UPLOAD_BYTES });
+      } catch {
+        return this.rejectUpload(found, {
+          reason: MEDIA_FAILURE_REASONS.tooLarge,
+          actorAdminId: input.actorAdminId,
+          source: 'confirm',
+          now,
+        });
+      }
       const detected = bytes ? detectImageMime(bytes) : null;
       if (!detected) {
         return this.rejectUpload(found, {

@@ -97,6 +97,19 @@ describe('transformer Sharp — transformation réelle', () => {
     expect(meta.exif).toBeUndefined();
   });
 
+  it('source plus étroite que la plus petite variante : une variante à la largeur naturelle est produite (revue sécurité finale)', async () => {
+    // Une image < 400 px devenait `ready` avec zéro variante — publiable,
+    // puis silencieusement invisible (aucune URL publique servable).
+    const narrow = await Sharp({
+      create: { width: 220, height: 90, channels: 3, background: '#3388cc' },
+    })
+      .png()
+      .toBuffer();
+    const transformed = await transformer.transform(new Uint8Array(narrow), ALL_VARIANTS);
+    expect(transformed.variants.length).toBeGreaterThanOrEqual(1);
+    expect(transformed.variants[0]!.width).toBe(220);
+  });
+
   it('un fichier non image lève (media → failed côté service), pas de rendu silencieux', async () => {
     const notAnImage = new TextEncoder().encode('definitely not an image');
     await expect(transformer.transform(notAnImage, ALL_VARIANTS)).rejects.toThrow();

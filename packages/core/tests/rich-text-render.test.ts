@@ -54,6 +54,19 @@ describe('rendu des blocs (slice 6 §17)', () => {
     expect(html).toBe('<p>Un.</p><h2>Deux</h2><h3>Trois</h3>');
   });
 
+  it('niveau de titre forgé hors 2–3 : aucun rendu (défense en profondeur, revue sécurité finale)', () => {
+    // `renderRichTextDocument` est une API publique : un appelant lui passant
+    // un document non parsé ne doit pas pouvoir injecter de nom de balise.
+    const forged = {
+      version: 1,
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: '2><img src=x onerror=alert(1)>' }, content: [{ type: 'text', text: 'piégé' }] },
+      ],
+    } as unknown as KreizRichTextDocument;
+    expect(renderRichTextDocument(forged, NO_MEDIA)).toBe('');
+  });
+
   it('listes → <ul>/<ol>/<li>, blockquote → <blockquote>, imbrication', () => {
     const html = renderRichTextDocument(
       doc([

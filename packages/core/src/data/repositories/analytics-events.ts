@@ -1,7 +1,10 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { KreizDatabase } from '../connection.js';
 import { analyticsEvents, type KreizAnalyticsEventInsert } from '../tables/analytics-events.js';
 import { contentEntries } from '../tables/content-entries.js';
+
+/** Taille de lot des purges bornées (rétention analytics). */
+const PURGE_BATCH = 5_000;
 
 /**
  * Repository des événements analytics (slice 8) — seule frontière Drizzle
@@ -33,7 +36,10 @@ export function createAnalyticsEventsRepository(db: KreizDatabase) {
      * Contenu publié correspondant à un chemin (`/articles/foo` → namespace
      * + slug) — requête indexée unique, appelée au plus une fois par page
      * vue. `null` : pas de contenu publié à ce chemin (accueil, page
-     * statique du Project, 404…).
+     * statique du Project, 404…). L'espace d'URL public est
+     * `published_slug` (revue sécurité finale) : une page vue à l'URL vivante
+     * d'un contenu publié doit s'attribuer, même si son slug éditorial a
+     * changé depuis — et une page vue à un slug non publié ne s'attribue pas.
      */
     async findPublishedContentByPath(
       namespace: string,
@@ -45,7 +51,7 @@ export function createAnalyticsEventsRepository(db: KreizDatabase) {
         .where(
           and(
             eq(contentEntries.routeNamespace, namespace),
-            eq(contentEntries.slug, slug),
+            eq(contentEntries.publishedSlug, slug),
             eq(contentEntries.status, 'published'),
             sql`${contentEntries.deletedAt} is null`,
           ),
@@ -55,13 +61,35 @@ export function createAnalyticsEventsRepository(db: KreizDatabase) {
       return row ? { contentEntryId: row.id, contentType: row.contentType } : null;
     },
 
-    /** Purge par rétention — les événements plus vieux que `before` sont supprimés. */
+    /**
+     * Purge par rétention — les événements plus vieux que `before` sont
+     * supprimés. **Bornée par lot** (revue sécurité finale) : jamais un
+     * `DELETE … RETURNING` non borné qui matérialiserait chaque id supprimé
+     * en mémoire Node sur une table massée par un flot d'événements hostile —
+     * des lots itératifs, réponse rapide, pas de pic mémoire. Retourne le
+     * nombre total supprimé.
+     */
     async purgeOlderThan(before: Date): Promise<number> {
-      const deleted = await db
-        .delete(analyticsEvents)
-        .where(sql`${analyticsEvents.createdAt} < ${before.toISOString()}::timestamptz`)
-        .returning({ id: analyticsEvents.id });
-      return deleted.length;
+      let total = 0;
+      // Boucle de lots : chaque itération supprime au plus `batch` lignes
+      // (sélection de ids bornée puis suppression ciblée — les DELETE
+      // Drizzle/Neon n'ont pas de LIMIT).
+      for (;;) {
+        const candidates = await db
+          .select({ id: analyticsEvents.id })
+          .from(analyticsEvents)
+          .where(sql`${analyticsEvents.createdAt} < ${before.toISOString()}::timestamptz`)
+          .limit(PURGE_BATCH);
+        if (candidates.length === 0) return total;
+        await db.delete(analyticsEvents).where(
+          inArray(
+            analyticsEvents.id,
+            candidates.map((candidate) => candidate.id),
+          ),
+        );
+        total += candidates.length;
+        if (candidates.length < PURGE_BATCH) return total;
+      }
     },
 
     /**

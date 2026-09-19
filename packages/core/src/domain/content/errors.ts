@@ -60,18 +60,38 @@ export class ContentDeletedError extends KreizContentError {
 }
 
 /**
- * Publication refusée : l'ancien chemin public du contenu est actuellement
- * le chemin vivant d'un **autre** contenu actif — créer la redirection
- * masquerait cette page réelle (mission §19, cadrage §12 « ancien slug
- * réapparu = conflit détecté »). La publication échoue **avant** toute
- * écriture ; l'admin résout en changeant le slug de l'un des deux contenus.
+ * **Concurrence optimiste** (passe de fermeture) : le Save portait une
+ * version (`expected_updated_at`) qui ne correspond plus à la ligne — un
+ * autre administrateur a enregistré entre-temps. L'UPDATE conditionnel n'a
+ * modifié **aucune** ligne : jamais d'écrasement silencieux. L'admin
+ * recharge la page et reporte sa modification.
+ */
+export class ContentConcurrentModificationError extends KreizContentError {
+  readonly entryId: string;
+  constructor(entryId: string) {
+    super(
+      `@kreiz/core : contenu modifié entre-temps par un autre administrateur (${entryId}) — rechargez la page pour récupérer la version à jour avant d'enregistrer.`,
+    );
+    this.entryId = entryId;
+  }
+}
+
+/**
+ * Publication refusée : un chemin public du contenu (l'ancien, que la
+ * redirection masquerait — mission §19, cadrage §12 « ancien slug réapparu =
+ * conflit détecté » — ou le **nouveau**, déjà figé par un autre contenu
+ * publié vivant dans le même namespace — revue sécurité finale) est
+ * actuellement occupé par un **autre** contenu. La publication échoue
+ * **avant** toute écriture, ou est arbitrée par l'index unique partiel
+ * `published_path_active_key` en cas de course ; l'admin résout en
+ * changeant le slug de l'un des deux contenus.
  */
 export class PublishedPathOccupiedError extends KreizContentError {
   readonly entryId: string;
   readonly occupiedPath: string;
   constructor(entryId: string, occupiedPath: string) {
     super(
-      `@kreiz/core : publication impossible — l'ancienne adresse publique ${occupiedPath} est actuellement utilisée par un autre contenu (entrée ${entryId}).`,
+      `@kreiz/core : publication impossible — l'adresse publique ${occupiedPath} est actuellement utilisée par un autre contenu (entrée ${entryId}).`,
     );
     this.entryId = entryId;
     this.occupiedPath = occupiedPath;

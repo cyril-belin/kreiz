@@ -92,11 +92,51 @@ export class S3ObjectStorage implements ObjectStorage {
     };
   }
 
-  async read(key: string): Promise<Uint8Array | null> {
+  async read(key: string, options: { maxBytes?: number } = {}): Promise<Uint8Array | null> {
     const response = await this.request('GET', key);
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new Error(`@kreiz/core : lecture storage en échec (statut ${response.status}).`);
+    }
+    const declared = Number(response.headers.get('content-length') ?? '0');
+    if (options.maxBytes !== undefined && Number.isFinite(declared) && declared > options.maxBytes) {
+      // L'objet annoncé dépasse la borne : annulation immédiate du corps,
+      // jamais de lecture (revue sécurité finale — l'objet peut avoir été
+      // réécrit après le `head` de vérification du confirm).
+      try {
+        await response.body?.cancel();
+      } catch {
+        // corps déjà clos
+      }
+      throw new Error(
+        `@kreiz/core : objet storage « ${key} » plus grand que la borne de lecture (${options.maxBytes} octets).`,
+      );
+    }
+    if (options.maxBytes !== undefined && response.body !== null) {
+      // Lecture plafonnée en streaming : la Content-Length peut mentir
+      // (absente, ou inférieure au corps réel).
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > options.maxBytes) {
+          await reader.cancel();
+          throw new Error(
+            `@kreiz/core : objet storage « ${key} » plus grand que la borne de lecture (${options.maxBytes} octets).`,
+          );
+        }
+        chunks.push(value);
+      }
+      const assembled = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        assembled.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return assembled;
     }
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);

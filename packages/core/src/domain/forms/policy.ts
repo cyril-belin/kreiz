@@ -38,6 +38,29 @@ export const CONTACT_FIELD_NAME_MAX_LENGTH = 60;
 /** Taille maximale du JSONB stocké — borne anti-abus, pas une règle éditoriale. */
 export const CONTACT_PAYLOAD_MAX_BYTES = 32 * 1024;
 
+/**
+ * Borne de **transport** de la requête de soumission (revue sécurité finale)
+ * : vérifiée avant tout bufferisation — un corps géant sans Content-Length
+ * est rejeté en streaming, jamais chargé en mémoire. Très au-dessus de la
+ * charge utile légitime (32 KiB agrégés) pour ne jamais rejeter un vrai
+ * formulaire, assez bas pour neutraliser le DoS mémoire (multipart hostile).
+ */
+export const CONTACT_BODY_MAX_BYTES = 1024 * 1024;
+
+// ——— Rétention PII (passe de fermeture pré-production) ———
+
+/**
+ * Bornes strictes de `KREIZ_CONTACT_RETENTION_DAYS` — purge des demandes de
+ * contact **traitées** plus anciennes que N jours (décision explicite de
+ * l'opérateur ; sans la variable, aucune purge automatique).
+ * - minimum 30 : jamais détruire trop vite une trace métier ;
+ * - maximum 730 (2 ans) : la rétention n'est pas un archivage permanent ;
+ * - recommandation : 180.
+ */
+export const CONTACT_RETENTION_DAYS_MIN = 30;
+export const CONTACT_RETENTION_DAYS_MAX = 730;
+export const CONTACT_RETENTION_DAYS_RECOMMENDED = 180;
+
 // ——— Jeton d'émission du formulaire (anti-spam, anti-replay borné) ———
 
 /** Nom du champ caché portant le jeton d'émission. */
@@ -85,6 +108,16 @@ export const contactNotificationStatuses = ['not_configured', 'pending', 'sent',
 export type ContactNotificationStatus = (typeof contactNotificationStatuses)[number];
 /** Tentatives maximales avant intervention humaine (l'admin relance depuis la boîte). */
 export const CONTACT_NOTIFICATION_MAX_ATTEMPTS = 5;
+
+/**
+ * **Bail de claim** d'une tentative de notification (revue sécurité finale)
+ * : un claim réussi repousse `notification_next_attempt_at` de cette durée —
+ * une tentative **en vol** ne peut être ni ré-armée (double-clic admin) ni
+ * re-claimée (balayage concurrent) tant que le bail court. Couvre très
+ * largement le timeout du transport (10 s) ; aligné sur le premier palier de
+ * backoff pour qu'un envoi mort-né (lambda tuie en vol) soit rejoué vite.
+ */
+export const CONTACT_NOTIFICATION_CLAIM_LEASE_MS = 2 * 60 * 1000;
 /**
  * Backoff des re-tentatives automatiques, indexé par numéro de tentative
  * échouée (1 → +2 min, 2 → +10 min, 3 → +1 h, 4 → +6 h ; au-delà, échec

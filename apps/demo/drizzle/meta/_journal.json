@@ -43,6 +43,20 @@
       "when": 1789567766435,
       "tag": "0005_soft_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789653641079,
+      "tag": "0006_mature_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789769917252,
+      "tag": "0007_massive_sleepwalker",
+      "breakpoints": true
     }
   ]
 }

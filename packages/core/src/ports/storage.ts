@@ -55,8 +55,15 @@ export interface ObjectStorage {
   /** Statut d'un objet, ou `null` s'il n'existe pas — vérification post-upload (mission §10). */
   head(key: string): Promise<StoredObjectHead | null>;
 
-  /** Lit l'objet complet, ou `null` s'il n'existe pas — entrée du transformer. */
-  read(key: string): Promise<Uint8Array | null>;
+  /**
+   * Lit l'objet, ou `null` s'il n'existe pas — entrée du transformer.
+   * `maxBytes` borne la lecture **en streaming** (revue sécurité finale) :
+   * l'URL présignée d'upload ne lie pas le corps — l'objet peut être
+   * réécrit après le `head` de vérification ; un objet plus grand que la
+   * borne fait échouer la lecture (`ObjectTooLargeError`) au lieu d'épuiser
+   * la mémoire du processus.
+   */
+  read(key: string, options?: { maxBytes?: number }): Promise<Uint8Array | null>;
 
   /** Écrit un objet (variantes transformées). */
   put(input: StoragePutInput): Promise<void>;

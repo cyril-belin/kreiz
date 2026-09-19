@@ -85,6 +85,15 @@ export function createInMemoryContentRepository(
     async updateDraft(id, patch) {
       const entry = state.entries.get(id);
       if (!entry || !active(entry)) return null;
+      // Concurrence optimiste (passe de fermeture) : version attendue
+      // présente et différente de la ligne → aucune modification (même
+      // sémantique que le UPDATE conditionnel PostgreSQL).
+      if (
+        patch.expectedUpdatedAt !== undefined &&
+        entry.updatedAt.getTime() !== patch.expectedUpdatedAt.getTime()
+      ) {
+        return null;
+      }
       const updated: KreizContentEntry = {
         ...entry,
         ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -116,6 +125,21 @@ export function createInMemoryContentRepository(
       for (const entry of state.entries.values()) {
         if (!active(entry) || options.excludeId === entry.id) continue;
         if (entry.routeNamespace === routeNamespace && entry.slug === slug) return true;
+      }
+      return false;
+    },
+
+    /** Miroir en mémoire de l'index unique partiel `published_path_active_key`. */
+    async publishedPathOccupiedByOther(routeNamespace, publishedSlug, options = {}) {
+      for (const entry of state.entries.values()) {
+        if (!active(entry) || options.excludeId === entry.id) continue;
+        if (
+          entry.routeNamespace === routeNamespace &&
+          entry.status === 'published' &&
+          entry.publishedSlug === publishedSlug
+        ) {
+          return true;
+        }
       }
       return false;
     },

@@ -133,6 +133,11 @@ function renderBlock(node: RichTextBlockNode, ctx: RichTextRenderContext): strin
     case 'heading': {
       const content = node.content ?? [];
       if (inlineIsBlank(content)) return '';
+      // Défense en profondeur (revue sécurité finale) : le niveau est validé
+      // par le parseur (2–3), mais `renderRichTextDocument` est une API
+      // publique — un appelant lui passant un JSON brut non parsé ne doit
+      // pouvoir injecter ni nom de balise ni attribut via `level`.
+      if (node.attrs.level !== 2 && node.attrs.level !== 3) return '';
       const tag = `h${node.attrs.level}`;
       return `<${tag}>${renderInline(content)}</${tag}>`;
     }

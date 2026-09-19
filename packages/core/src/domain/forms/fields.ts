@@ -273,6 +273,22 @@ export function contactFieldErrorMessage(issue: {
 }
 
 /**
+ * Textes non stockables en JSONB PostgreSQL (revue sécurité finale) : le
+ * NUL (`\u0000`) et les substituts isolés (`\uD800`-`\uDFFF` non appariés)
+ * sont refusés par PostgreSQL (erreur 22021) au moment de l'INSERT — sans
+ * cette garde, ils produisaient un 500 brut sur la route publique au lieu
+ * d'une erreur de validation propre. CRLF reste autorisé (message multiligne).
+ */
+const UNSTORABLE_TEXT_PATTERN =
+  /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+function rejectUnstorableText(value: string, ctx: z.RefinementCtx): void {
+  if (UNSTORABLE_TEXT_PATTERN.test(value)) {
+    ctx.addIssue({ code: 'custom', message: 'Ce champ contient des caractères non supportés.' });
+  }
+}
+
+/**
  * Schéma strict du payload, dérivé des champs déclarés :
  * - whitelist totale — les champs non déclarés ne sont jamais lus ;
  * - chaque valeur est trimmée puis bornée (`required` = non vide) ;
@@ -298,8 +314,13 @@ export function contactPayloadSchemaFromFields(
         const max = contactFieldMaxLength(descriptor);
         shape[name] = wrap(
           descriptor.required
-            ? z.string().trim().min(1).max(max)
-            : z.string().trim().max(max).transform((value) => (value.length === 0 ? undefined : value)),
+            ? z.string().trim().min(1).max(max).superRefine(rejectUnstorableText)
+            : z
+                .string()
+                .trim()
+                .max(max)
+                .superRefine(rejectUnstorableText)
+                .transform((value) => (value.length === 0 ? undefined : value)),
         );
         break;
       }

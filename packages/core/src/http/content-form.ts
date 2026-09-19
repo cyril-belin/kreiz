@@ -55,6 +55,12 @@ export type ParsedContentForm = {
   seo: Record<string, unknown>;
   /** Données structurées à valider par le schéma du type (champs vides omis). */
   data: Record<string, unknown>;
+  /**
+   * **Concurrence optimiste** (passe de fermeture) — champ système
+   * `expected_updated_at` rendu par la page d'édition (ISO brut, `''` si
+   * absent). Le service décide : garde conditionnelle ou flux historique.
+   */
+  expectedUpdatedAt: string;
   /** Valeurs brutes par champ (re-rendu fidèle). */
   values: Record<string, FormFieldValue>;
   /** Erreurs structurelles (requis vide, paire incomplète) — la validation métier reste au service. */
@@ -219,6 +225,9 @@ export function parseContentForm(
     // Champ système whitelisté (slice 5) — le service valide l'existence du
     // média ; tout autre champ non déclaré reste ignoré.
     coverMediaId: stringEntry(formData, 'cover_media_id') || null,
+    // Champ système whitelisté (passe de fermeture) — version attendue du
+    // contenu rendue par la page d'édition (concurrence optimiste).
+    expectedUpdatedAt: stringEntry(formData, 'expected_updated_at'),
     seo,
     data,
     values,

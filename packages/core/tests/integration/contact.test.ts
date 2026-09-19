@@ -190,14 +190,93 @@ describeIntegration('contact_requests — repository sur PostgreSQL réel', () =
       dedupKey: `dedup-${runId}-3`,
       createdAt: NOW,
     });
-    const [winner, loser] = await Promise.all([
+    const claims = await Promise.all([
       requests.claimNotificationAttempt(request.id, { expectedAttempts: 0 }),
       requests.claimNotificationAttempt(request.id, { expectedAttempts: 0 }),
     ]);
-    expect(winner).not.toBeNull();
-    expect(loser).toBeNull();
+    // Invariant : exactement un gagnant (l'IDENTITÉ du gagnant dépend de
+    // l'ordre d'arrivée au transport — Neon, pont local — et n'est pas le
+    // contrat). Le compteur fait foi.
+    expect(claims.filter((claim) => claim !== null)).toHaveLength(1);
     const row = await requests.findById(request.id);
     expect(row?.notificationAttempts).toBe(1);
+  });
+
+  it('id non UUID : introuvable, jamais d’erreur SQL brute 22P02 (revue sécurité finale)', async () => {
+    expect(await requests.findById('abc')).toBeNull();
+    expect(await requests.findById('not-a-uuid-at-all')).toBeNull();
+    expect(await requests.updateStatus('abc', 'handled')).toBeNull();
+  });
+
+  it('rétention PII (passe de fermeture) : purge des `handled` anciens — `new` et `handled` récents conservés, idempotente, bornée', async () => {
+    const old = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+    const recent = new Date();
+    const insert = async (dedup: string, status: 'new' | 'handled', createdAt: Date) => {
+      const { request } = await requests.insertOrFindDuplicate({
+        formId: FORM_KEY,
+        payload: { note: 'pi' },
+        notificationStatus: 'not_configured',
+        notificationNextAttemptAt: null,
+        dedupKey: `dedup-${dedup}`,
+        createdAt,
+      });
+      if (status === 'handled') {
+        await requests.updateStatus(request.id, 'handled');
+      }
+      return request.id;
+    };
+    const handledOld = await insert(`ret-ho-${runId}-1`, 'handled', old);
+    const handledRecent = await insert(`ret-hr-${runId}-1`, 'handled', recent);
+    const newOld = await insert(`ret-no-${runId}-1`, 'new', old);
+
+    // Purge : uniquement les `handled` antérieurs au seuil (400 jours).
+    const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    const first = await requests.purgeHandledCreatedBefore(cutoff);
+    expect(first).toBe(1);
+    expect(await requests.findById(handledOld)).toBeNull();
+    expect(await requests.findById(handledRecent)).not.toBeNull();
+    expect(await requests.findById(newOld)).not.toBeNull();
+
+    // Idempotente : rien à purger au second passage.
+    expect(await requests.purgeHandledCreatedBefore(cutoff)).toBe(0);
+
+    // Bornée : un plafond total bas limite le nombre purgé par invocation.
+    for (let index = 0; index < 5; index += 1) {
+      await insert(`ret-cap-${runId}-${index}`, 'handled', old);
+    }
+    const capped = await requests.purgeHandledCreatedBefore(cutoff, { totalCap: 2 });
+    expect(capped).toBe(2);
+    // Le rattrapage se fait à l'invocation suivante (cron).
+    expect(await requests.purgeHandledCreatedBefore(cutoff)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('bail de claim (revue sécurité finale) : une tentative en vol n’est ni ré-armable ni re-claimable', async () => {
+    const { request } = await requests.insertOrFindDuplicate({
+      formId: FORM_KEY,
+      payload: {},
+      notificationStatus: 'pending',
+      notificationNextAttemptAt: NOW,
+      dedupKey: `dedup-${runId}-lease`,
+      createdAt: NOW,
+    });
+    const claimed = await requests.claimNotificationAttempt(request.id, { expectedAttempts: 0, now: NOW });
+    expect(claimed).not.toBeNull();
+    // Pendant le bail : un claim concurrent avec le même compteur attendu échoue.
+    expect(
+      await requests.claimNotificationAttempt(request.id, { expectedAttempts: 0, now: NOW }),
+    ).toBeNull();
+    // Pendant le bail : le ré-armage admin échoue aussi (double-clic pendant un envoi lent).
+    expect(await requests.rearmNotification(request.id, { now: NOW })).toBeNull();
+    // La tentative en vol sort de la file du balayage jusqu'à expiration du bail.
+    const due = await requests.listNotificationDue({ now: NOW, maxAttempts: 5 });
+    expect(due.some((row) => row.id === request.id)).toBe(false);
+    // Après expiration du bail : ré-armage possible puis nouveau claim.
+    const later = new Date(NOW.getTime() + 3 * 60 * 1000);
+    const rearmed = await requests.rearmNotification(request.id, { now: later });
+    expect(rearmed).not.toBeNull();
+    expect(
+      await requests.claimNotificationAttempt(request.id, { expectedAttempts: 0, now: later }),
+    ).not.toBeNull();
   });
 
   it('cycle de notification complet et liste des demandes dues', async () => {
@@ -255,7 +334,11 @@ describeIntegration('contact service — bout en bout sur la vraie base', () => 
   it('soumission valide : persistée, notifiée, auditée — rate limiting en table réelle', async () => {
     const mailer = makeMailer(() => ({ ok: true, messageId: 'it-1' }));
     const service = makeService(mailer);
-    const outcome = await service.submit(validSubmission());
+    // Horloge réelle pour ce test : le compteur de rate limiting créé « maintenant »
+    // ne peut pas être purgé par la purge opportuniste (< 24 h) des tests de
+    // login admin qui courent en parallèle sur la même base (le jeton reste
+    // valide : émis à NOW, fenêtre de 90 jours).
+    const outcome = await service.submit(validSubmission({ now: new Date() }));
     expect(outcome.kind).toBe('submitted');
     if (outcome.kind !== 'submitted') return;
     expect(outcome.notification).toEqual({ status: 'sent' });

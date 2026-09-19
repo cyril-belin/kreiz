@@ -74,12 +74,13 @@ morte, aucune variable lue non documentée (audit slice 10).
 
 ## Tests
 
-- 68 fichiers / 590 tests unitaires verts ; 17 fichiers d'intégration
-  (Neon ou PostgreSQL réel) ; 10 specs E2E Playwright dont **le parcours
-  global** (`core-happy-path.spec.ts` : média → article riche → publish →
-  public → analytics → contact → conversion → Save-sans-Publish →
-  republier) et **le recovery** (`core-recovery.spec.ts` : panne mail →
-  relance admin → livré + audit) — 84 tests E2E verts en suite complète.
+- 69 fichiers / **736 tests verts** (unitaires + intégration PostgreSQL
+  réel, mis à jour par la revue sécurité finale) ; 10 specs E2E Playwright
+  dont **le parcours global** (`core-happy-path.spec.ts` : média → article
+  riche → publish → public → analytics → contact → conversion →
+  Save-sans-Publish → republier) et **le recovery** (`core-recovery.spec.ts`
+  : panne mail → relance admin → livré + audit) — **84 tests E2E verts** en
+  suite complète (re-passés après la revue).
 - CI GitHub Actions : `quality` (lint/build/typecheck/unit, toujours) et
   `integration` (branche Neon éphémère : migrations → intégration → E2E →
   suppression, secrets réservés au repo d'origine).
@@ -100,9 +101,16 @@ cron (#6). Limitations V1 assumées : mono-admin (pas de RBAC), pas de
 workflow multi-étapes, pas d'i18n complet, pas de recherche, pas de
 scheduler interne.
 
-## Prochaine étape
+## Revue sécurité finale + passe de fermeture — effectuées (slice 11)
 
-**Final security / adversarial review of the complete Core** — revue
-sécurité/adversariale dédiée sur le Core fermé. Son cahier des charges
-détaillé sera défini séparément ; le registre de dette et la cartographie
-des données servent d'inputs.
+La revue adversariale du Core complet (GLM) a été menée (aucun CRITICAL ;
+2 HIGH corrigés — inlining d'environnement dans le bundle serveur, unicité
+des URL publiques — plus 11 MEDIUM et 9 LOW traités ; migrations
+0006/0007), puis une revue senior indépendante (Claude, sans modification)
+a confirmé architecture/code/sécurité solides et CONDITIONALLY READY, et la
+**passe de fermeture** a livré les derniers écarts : `POST /api/maintenance`
+(cron externe, bearer dédié), rétention PII contact opt-in, concurrence
+optimiste des Saves (`expected_updated_at`), garde CI anti faux vert
+(`KREIZ_REQUIRE_INTEGRATION_DB`), guard préconditions Astro. Rapports et
+conditions restantes : [security-review-final.md](security-review-final.md)
+et [technical-debt.md](technical-debt.md) (constats Claude ouverts).

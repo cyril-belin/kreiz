@@ -2,7 +2,7 @@ import type { AdminAuditLogRepository } from '../data/repositories/admin-audit-l
 import type { MediaRepository } from '../data/repositories/media.js';
 import type { KreizMedia, KreizMediaVariant } from '../data/tables/media.js';
 import { mediaVariantKey } from '../domain/media/keys.js';
-import { MEDIA_VARIANT_WIDTHS, type KreizMediaVariantFormat } from '../domain/media/policy.js';
+import { MEDIA_MAX_UPLOAD_BYTES, MEDIA_VARIANT_WIDTHS, type KreizMediaVariantFormat } from '../domain/media/policy.js';
 import type { ImageVariantSpec } from '../ports/image-transform.js';
 import type { ObjectStorage } from '../ports/storage.js';
 import { MEDIA_AUDIT_ACTIONS, type MediaAuditSource } from './media-audit.js';
@@ -98,7 +98,7 @@ export function createMediaProcessingService(deps: MediaProcessingServiceDeps) {
 
       let originalBytes: Uint8Array | null;
       try {
-        originalBytes = await storage.read(found.storageKey);
+        originalBytes = await storage.read(found.storageKey, { maxBytes: MEDIA_MAX_UPLOAD_BYTES });
       } catch {
         originalBytes = null;
       }

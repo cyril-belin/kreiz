@@ -251,8 +251,11 @@ export function createContactService(deps: ContactServiceDeps) {
     const now = options.now ?? new Date();
 
     // Claim : un seul chemin (soumission, balayage, admin) envoie réellement.
+    // L'échéance (`now`) participe au bail : une tentative en vol n'est ni
+    // re-claimable ni ré-armable tant qu'elle court (revue sécurité finale).
     const claimed = await requests.claimNotificationAttempt(options.request.id, {
       expectedAttempts: options.request.notificationAttempts,
+      now,
     });
     if (!claimed) return null;
 
@@ -406,6 +409,28 @@ export function createContactService(deps: ContactServiceDeps) {
         else skipped += 1;
       }
       return { promoted, sent, failed, skipped };
+    },
+
+    /**
+     * **Rétention PII** (passe de fermeture pré-production) : purge des
+     * demandes **traitées** (`handled`) plus anciennes que `retentionDays`.
+     * La décision d'activer la rétention appartient à l'opérateur
+     * (`KREIZ_CONTACT_RETENTION_DAYS` — bornes dans
+     * `CONTACT_RETENTION_DAYS_MIN/MAX`) : sans valeur, **aucune purge
+     * automatique** (`null` retourné) — jamais une suppression sans décision
+     * explicite. Les demandes encore actives (`new`) ne sont jamais purgées.
+     * Idempotente et bornée (lots + plafond total dans le repository).
+     */
+    async runContactRetention(
+      options: { retentionDays?: number | null; now?: Date } = {},
+    ): Promise<{ purged: number } | null> {
+      const retentionDays = options.retentionDays;
+      if (retentionDays === null || retentionDays === undefined || !Number.isInteger(retentionDays)) {
+        return null;
+      }
+      const now = options.now ?? new Date();
+      const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+      return { purged: await requests.purgeHandledCreatedBefore(cutoff) };
     },
   };
 }

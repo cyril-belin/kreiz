@@ -109,6 +109,16 @@ export const PUBLIC_ANALYTICS_BEACON_PATH = PUBLIC_ANALYTICS_BEACON_PATTERN;
  */
 export const PUBLIC_FORM_SUBMIT_PATTERN = '/api/forms/[key]';
 
+/**
+ * **Endpoint de maintenance** (passe de fermeture) — `POST /api/maintenance`
+ * pour le cron externe (Vercel Cron) : hors `/admin`, **jamais** de session
+ * admin, authentifié par bearer token (`KREIZ_MAINTENANCE_TOKEN`,
+ * comparaison temps constant, refus par défaut 503 sans configuration).
+ * Déclenche uniquement les services de recovery existants — aucun scheduler
+ * interne, aucune logique métier dupliquée.
+ */
+export const PUBLIC_MAINTENANCE_PATTERN = '/api/maintenance';
+
 // ——— SEO public (slice 9) — fichiers **prérendus**, hors /admin, sans session ———
 
 /**
@@ -160,6 +170,7 @@ export const PUBLIC_ROUTE_PATTERNS = [
   PUBLIC_ANALYTICS_BEACON_PATTERN,
   PUBLIC_SITEMAP_PATH,
   PUBLIC_ROBOTS_PATH,
+  PUBLIC_MAINTENANCE_PATTERN,
 ] as const;
 
 // ——— Constructeurs d'URL admin (pages et formulaires) ———

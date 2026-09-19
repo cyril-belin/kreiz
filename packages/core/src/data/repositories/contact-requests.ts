@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { KreizDatabase } from '../connection.js';
 import {
   contactRequests,
@@ -6,6 +6,14 @@ import {
   type KreizContactRequest,
   type KreizContactRequestStatus,
 } from '../tables/contact-requests.js';
+import { CONTACT_NOTIFICATION_CLAIM_LEASE_MS } from '../../domain/forms/policy.js';
+
+/**
+ * Format UUID de la colonne id — un id non conforme est « introuvable »,
+ * jamais une erreur SQL brute (22P02) remontée aux routes admin (même garde
+ * que les repositories contenus et médias ; revue sécurité finale).
+ */
+const CONTACT_REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Repository des demandes de contact (slice 7) — seule frontière Drizzle du
@@ -65,6 +73,7 @@ export function createContactRequestsRepository(db: KreizDatabase) {
     },
 
     findById(id: string): Promise<KreizContactRequest | null> {
+      if (!CONTACT_REQUEST_ID_PATTERN.test(id)) return Promise.resolve(null);
       return db
         .select()
         .from(contactRequests)
@@ -97,6 +106,7 @@ export function createContactRequestsRepository(db: KreizDatabase) {
 
     /** Transition d'état éditorial (`new` ⇄ `handled`) — retourne la ligne à jour. */
     async updateStatus(id: string, status: KreizContactRequestStatus): Promise<KreizContactRequest | null> {
+      if (!CONTACT_REQUEST_ID_PATTERN.test(id)) return null;
       const rows = await db
         .update(contactRequests)
         .set({ status })
@@ -109,24 +119,36 @@ export function createContactRequestsRepository(db: KreizDatabase) {
      * Réserve une tentative d'envoi : incrément conditionnel — réussi une
      * seule fois par valeur attendue du compteur. Retourne `null` si la
      * ligne a changé entre-temps (claim concurrent, notification déjà
-     * envoyée) : l'appelant renonce sans double envoi.
+     * envoyée, **tentative en vol** protégée par son bail — revue sécurité
+     * finale) : l'appelant renonce sans double envoi. Un claim gagnant pose
+     * `notification_claimed_at = now` (bail) et repousse l'échéance de la
+     * durée du bail : la tentative en vol sort de la file du balayage
+     * jusqu'à résolution ou expiration.
      */
     async claimNotificationAttempt(
       id: string,
-      options: { expectedAttempts: number },
+      options: { expectedAttempts: number; now?: Date },
     ): Promise<KreizContactRequest | null> {
+      const now = options.now ?? new Date();
+      const leaseExpiredIso = new Date(now.getTime() - CONTACT_NOTIFICATION_CLAIM_LEASE_MS).toISOString();
       const rows = await db
         .update(contactRequests)
         .set({
           notificationAttempts: options.expectedAttempts + 1,
           notificationStatus: sql`case when ${contactRequests.notificationStatus} = 'not_configured' then 'pending' else ${contactRequests.notificationStatus} end`,
           notificationFailure: null,
+          notificationClaimedAt: now,
+          notificationNextAttemptAt: new Date(now.getTime() + CONTACT_NOTIFICATION_CLAIM_LEASE_MS),
         })
         .where(
           and(
             eq(contactRequests.id, id),
             eq(contactRequests.notificationAttempts, options.expectedAttempts),
             inArray(contactRequests.notificationStatus, ['pending', 'failed', 'not_configured']),
+            or(
+              isNull(contactRequests.notificationClaimedAt),
+              lte(contactRequests.notificationClaimedAt, new Date(leaseExpiredIso)),
+            ),
           ),
         )
         .returning();
@@ -141,6 +163,7 @@ export function createContactRequestsRepository(db: KreizDatabase) {
           notifiedAt: options.notifiedAt,
           notificationNextAttemptAt: null,
           notificationFailure: null,
+          notificationClaimedAt: null,
         })
         .where(eq(contactRequests.id, id))
         .returning();
@@ -157,6 +180,9 @@ export function createContactRequestsRepository(db: KreizDatabase) {
           notificationStatus: 'failed',
           notificationFailure: options.failure,
           notificationNextAttemptAt: options.nextAttemptAt,
+          // Résolu (en échec) : le bail est libéré — la relance admin passe
+          // outre le backoff, jamais outre un envoi encore en vol.
+          notificationClaimedAt: null,
         })
         // Conditionnel : une tentative en vol qui échoue APRÈS une relance
         // concurrente déjà réussie ne doit jamais écraser un `sent`.
@@ -166,27 +192,44 @@ export function createContactRequestsRepository(db: KreizDatabase) {
     },
 
     /**
-     * Relance admin : compteur remis à zéro et tentative immédiate. Le
-     * `WHERE notification_status <> 'sent'` interdit de repartir après un
-     * succès (pas d'envoi en double par un clic rapproché).
+     * Relance admin : compteur remis à zéro et tentative immédiate —
+     * **passe outre le backoff** (décision explicite de l'admin), jamais
+     * outre un envoi en vol : le `WHERE` exige un bail absent ou expiré
+     * (revue sécurité finale — un double-clic pendant un envoi lent ne peut
+     * pas produire un second envoi). `notification_status <> 'sent'` interdit
+     * de repartir après un succès.
      */
     async rearmNotification(id: string, options: { now?: Date } = {}): Promise<KreizContactRequest | null> {
+      const now = options.now ?? new Date();
+      const leaseExpired = new Date(now.getTime() - CONTACT_NOTIFICATION_CLAIM_LEASE_MS);
       const rows = await db
         .update(contactRequests)
         .set({
           notificationAttempts: 0,
           // `now` injectable : le service peut contrôler l'horloge (tests,
           // balayage) — jamais d'échéance dépendant du seul mur.
-          notificationNextAttemptAt: options.now ?? new Date(),
+          notificationNextAttemptAt: now,
+          notificationClaimedAt: null,
           notificationStatus: sql`case when ${contactRequests.notificationStatus} = 'not_configured' then 'pending' else ${contactRequests.notificationStatus} end`,
         })
-        .where(and(eq(contactRequests.id, id), sql`${contactRequests.notificationStatus} <> 'sent'`))
+        .where(
+          and(
+            eq(contactRequests.id, id),
+            sql`${contactRequests.notificationStatus} <> 'sent'`,
+            or(
+              isNull(contactRequests.notificationClaimedAt),
+              lte(contactRequests.notificationClaimedAt, leaseExpired),
+            ),
+          ),
+        )
         .returning();
       return rows.at(0) ?? null;
     },
 
-    /** File du balayage : notifications dues, plafond d'attempts non atteint. */
+    /** File du balayage : notifications dues, plafond d'attempts non atteint,
+     * hors tentatives en vol (bail non expiré — revue sécurité finale). */
     listNotificationDue(options: { now: Date; limit?: number; maxAttempts: number }): Promise<KreizContactRequest[]> {
+      const leaseExpired = new Date(options.now.getTime() - CONTACT_NOTIFICATION_CLAIM_LEASE_MS);
       return db
         .select()
         .from(contactRequests)
@@ -196,6 +239,10 @@ export function createContactRequestsRepository(db: KreizDatabase) {
             isNotNull(contactRequests.notificationNextAttemptAt),
             lte(contactRequests.notificationNextAttemptAt, options.now),
             sql`${contactRequests.notificationAttempts} < ${options.maxAttempts}`,
+            or(
+              isNull(contactRequests.notificationClaimedAt),
+              lte(contactRequests.notificationClaimedAt, leaseExpired),
+            ),
           ),
         )
         .orderBy(contactRequests.notificationNextAttemptAt)
@@ -234,7 +281,42 @@ export function createContactRequestsRepository(db: KreizDatabase) {
         .returning({ id: contactRequests.id });
       return rows.length;
     },
+
+    /**
+     * **Rétention PII** (passe de fermeture pré-production) : supprime les
+     * demandes **traitées** (`handled`) créées avant `before` — jamais une
+     * demande encore active (`new`) : la purge automatique ne détruit pas
+     * une demande sans décision humaine explicite. Bornée en lots itératifs
+     * (jamais un `DELETE … RETURNING` massif) avec un plafond total par
+     * invocation : le cron rattrape sur les invocations suivantes.
+     * Idempotente : repartir ne trouve plus rien. Retourne le total purgé.
+     */
+    async purgeHandledCreatedBefore(before: Date, options: { totalCap?: number } = {}): Promise<number> {
+      const totalCap = options.totalCap ?? CONTACT_RETENTION_PURGE_TOTAL_CAP;
+      let total = 0;
+      for (;;) {
+        const candidates = await db
+          .select({ id: contactRequests.id })
+          .from(contactRequests)
+          .where(and(eq(contactRequests.status, 'handled'), lt(contactRequests.createdAt, before)))
+          .limit(Math.min(PURGE_BATCH, totalCap - total));
+        if (candidates.length === 0) return total;
+        await db.delete(contactRequests).where(
+          inArray(
+            contactRequests.id,
+            candidates.map((candidate) => candidate.id),
+          ),
+        );
+        total += candidates.length;
+        if (candidates.length < PURGE_BATCH || total >= totalCap) return total;
+      }
+    },
   };
 }
+
+/** Taille de lot des purges bornées. */
+const PURGE_BATCH = 5_000;
+/** Plafond total par invocation de la purge de rétention contact. */
+const CONTACT_RETENTION_PURGE_TOTAL_CAP = 10_000;
 
 export type ContactRequestsRepository = ReturnType<typeof createContactRequestsRepository>;

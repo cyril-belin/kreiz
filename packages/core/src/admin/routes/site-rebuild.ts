@@ -8,6 +8,12 @@ import { getKreizContentRuntime } from '../../http/admin-runtime.js';
 import { ADMIN_HOME_PATH, ADMIN_LOGIN_PATH } from '../../http/admin-routes.js';
 import { sessionTokenFromCookies } from '../../http/guards.js';
 import { isTrustedSameSiteMutation } from '../../http/mutations.js';
+import { createRateLimitsRepository } from '../../data/repositories/rate-limits.js';
+
+/** Clé globale du plafond de rebuilds manuels (anti-tempête). */
+const MANUAL_REBUILD_RATE_LIMIT_KEY = 'kreiz:rebuild-manual:v1';
+/** Fenêtre du plafond : un rebuild manuel par minute. */
+const MANUAL_REBUILD_WINDOW_MS = 60_000;
 
 /**
  * Reconstruction manuelle du site — **mutation** POST authentifiée
@@ -73,6 +79,23 @@ export const POST: APIRoute = async (ctx) => {
   }
 
   const returnTo = safeReturnTo(formData.get('return_to'));
+
+  // Anti-tempête (revue sécurité finale) : le rebuild **manuel** est plafonné
+  // à un déclenchement par minute (clé globale, fenêtre glissante) — chaque
+  // POST accepté enclenche un build chez le provider ; sans garde, un clic
+  // répété (ou un script rejouant une session valide) draine le budget de
+  // builds et bloque les déploiements réels. Les rebuilds des publications
+  // passent par un autre chemin et ne sont pas plafonnés (un par publication
+  // est le contrat).
+  const counter = await createRateLimitsRepository(runtime.db).incrementWindowed(
+    MANUAL_REBUILD_RATE_LIMIT_KEY,
+    { windowMs: MANUAL_REBUILD_WINDOW_MS, now: new Date() },
+  );
+  if (counter.count > 1) {
+    const url = new URL(returnTo, 'http://k');
+    url.searchParams.set('rebuild', 'cooldown');
+    return redirect(`${url.pathname}${url.search}`, prod);
+  }
 
   const { rebuild } = await runtime.publication.requestSiteRebuild({
     actorAdminId: access.admin.id,

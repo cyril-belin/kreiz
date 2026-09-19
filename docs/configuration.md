@@ -80,6 +80,8 @@ fonctionne.
 | `KREIZ_MAIL_WEBHOOK_TOKEN` | non (exige l'URL) | oui | `Authorization: Bearer` vers le relais |
 | `KREIZ_MAIL_FROM_EMAIL` | requise si l'URL | non | Expéditeur d'enveloppe (adresse vérifiée chez le transport) |
 | `KREIZ_MAIL_FROM_NAME` | non | non | Nom affiché (≤ 120 car.) |
+| `KREIZ_MAINTENANCE_TOKEN` | non | oui | Token du endpoint de maintenance (`POST /api/maintenance`, cron externe) : `Authorization: Bearer`, comparaison temps constant, ≥ 32 car. **Sans valeur, le endpoint refuse tout (503)** |
+| `KREIZ_CONTACT_RETENTION_DAYS` | non | non | Rétention (jours, 30–730, reco 180) des demandes de contact **traitées** — purge par lots via le endpoint de maintenance. Sans valeur : aucune purge automatique |
 
 Sans relais : demandes stockées et visibles admin, statut
 « notification non configurée ».

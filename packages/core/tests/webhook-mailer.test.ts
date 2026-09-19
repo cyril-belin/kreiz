@@ -22,6 +22,7 @@ let captured: Array<{ auth: string | null; body: string }> = [];
 let status = 200;
 let respondBody = 'OK';
 let dropConnections = false;
+let redirectLocation: string | null = null;
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -36,7 +37,11 @@ beforeAll(async () => {
         res.destroy();
         return;
       }
-      res.writeHead(status, { 'content-type': 'text/plain', 'x-kreiz-message-id': 'transport-42' });
+      res.writeHead(status, {
+        'content-type': 'text/plain',
+        'x-kreiz-message-id': 'transport-42',
+        ...(redirectLocation ? { location: redirectLocation } : {}),
+      });
       res.end(respondBody);
     });
   });
@@ -127,5 +132,23 @@ describe('createWebhookMailer', () => {
     expect(() => createWebhookMailer({ webhookUrl: 'pas-une-url', allowInsecureHttp: true })).toThrow(
       /invalide/,
     );
+  });
+
+  it('ne suit jamais une redirection (revue sécurité finale) — un 3xx est un refus', async () => {
+    // Un relais compromis qui répond 302 ne doit ni faire suivre le corps
+    // (PII visiteur) vers un autre hôte, ni le faire retomber en HTTP clair.
+    captured = [];
+    status = 302;
+    redirectLocation = 'http://attacker.example/payload';
+    const mailer = createWebhookMailer({ webhookUrl: localUrl(), allowInsecureHttp: true });
+    const result = await mailer.send(email);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.failure.kind === 'rejected') {
+      expect(result.failure.statusCode).toBe(302);
+    }
+    // Une seule requête reçue : le fetch n'a pas suivi la redirection.
+    expect(captured).toHaveLength(1);
+    redirectLocation = null;
+    status = 200;
   });
 });

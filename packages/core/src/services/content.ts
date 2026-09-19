@@ -8,6 +8,7 @@ import type { PublicMediaView } from '../domain/media/view-model.js';
 import { resolvePublicMediaView } from '../domain/media/view-model.js';
 import type { ContentTypeRegistry, ResolvedContentTypeDeclaration } from '../domain/content/registry.js';
 import {
+  ContentConcurrentModificationError,
   ContentDeletedError,
   ContentNotFoundError,
 } from '../domain/content/errors.js';
@@ -120,6 +121,15 @@ export type UpdateDraftInput = {
    * ne bascule qu'au Publish (contrat Save != Publish).
    */
   seo?: unknown;
+  /**
+   * **Concurrence optimiste** (passe de fermeture) : version du contenu
+   * (`updated_at` ISO) telle que rendue au formulaire. Présent et non vide →
+   * écriture **conditionnelle** : modifié entre-temps ⇒
+   * `ContentConcurrentModificationError` (aucun écrasement silencieux).
+   * Vide/absent → écriture historique inconditionnelle (flows sans état
+   * rendu : tests, tooling).
+   */
+  expectedUpdatedAt?: string;
   actorAdminId: string;
 };
 
@@ -466,6 +476,19 @@ export function createContentService(deps: ContentServiceDeps) {
         return { kind: 'invalid', errors };
       }
 
+      // Concurrence optimiste (passe de fermeture) : la version attendue
+      // voyage en ISO depuis le formulaire. Vide/absente = pas de garde
+      // (flows sans état rendu) ; non parsable = état manifestement altéré
+      // → conflit immédiat, jamais une écriture au doigt mouillé.
+      let expectedUpdatedAt: Date | undefined;
+      if (input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt !== '') {
+        const parsed = new Date(input.expectedUpdatedAt);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new ContentConcurrentModificationError(input.entryId);
+        }
+        expectedUpdatedAt = parsed;
+      }
+
       try {
         const updated = await entries.updateDraft(existing.id, {
           title,
@@ -473,12 +496,18 @@ export function createContentService(deps: ContentServiceDeps) {
           data,
           ...(coverMediaId !== undefined ? { coverMediaId } : {}),
           ...(seo !== undefined ? { seo } : {}),
+          ...(expectedUpdatedAt !== undefined ? { expectedUpdatedAt } : {}),
           updatedBy: input.actorAdminId,
           updatedAt: now,
         });
         if (!updated) {
-          // Supprimé entre la lecture et l'écriture.
-          throw new ContentDeletedError(input.entryId);
+          // Garde optimiste (modifié entre-temps) ou supprimé entre la
+          // lecture et l'écriture : on relit pour nommer la bonne cause.
+          const reread = await entries.findById(input.entryId);
+          if (!reread || reread.deletedAt) {
+            throw new ContentDeletedError(input.entryId);
+          }
+          throw new ContentConcurrentModificationError(input.entryId);
         }
         await auditContentEvent(CONTENT_AUDIT_ACTIONS.updated, updated, input.actorAdminId);
         return {

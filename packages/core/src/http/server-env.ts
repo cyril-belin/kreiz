@@ -7,7 +7,12 @@ import { kreizDatabaseEnvSchema } from '../data/env.js';
 import { createAdminAuthServiceForDatabase, type AdminAuthService } from '../services/admin-auth.js';
 import { createNoopRebuildTrigger, type RebuildTrigger } from '../ports/rebuild.js';
 import { createVercelDeployHookTrigger } from '../adapters/vercel/rebuild.js';
-import { isSafeEmailAddress, isSafeHeaderValue } from '../domain/forms/policy.js';
+import {
+  CONTACT_RETENTION_DAYS_MAX,
+  CONTACT_RETENTION_DAYS_MIN,
+  isSafeEmailAddress,
+  isSafeHeaderValue,
+} from '../domain/forms/policy.js';
 
 /**
  * Environnement runtime des routes admin injectées par le Core.
@@ -88,6 +93,28 @@ export const kreizAdminEnvSchema = z.object({
     .max(120)
     .refine(isSafeHeaderValue, 'KREIZ_MAIL_FROM_NAME invalide (aucun caractère de contrôle)')
     .optional(),
+  /**
+   * **Token du endpoint de maintenance** (`POST /api/maintenance`, passe de
+   * fermeture) — authentification machine-to-machine pour le cron externe
+   * (Authorization: Bearer, comparaison temps constant). **Optionnel** :
+   * sans valeur, le endpoint refuse toute exécution (503) — en production,
+   * l'absence du token empêche toute maintenance automatique. ≥ 32
+   * caractères ; secret : jamais loggué, jamais rendu.
+   */
+  KREIZ_MAINTENANCE_TOKEN: z.string().min(32).max(255).optional(),
+  /**
+   * **Rétention des demandes de contact traitées** (jours) — décision
+   * explicite de l'opérateur : sans valeur, aucune purge automatique (les
+   * PII restent sous la responsabilité du Project, dette documentée).
+   * Bornes strictes : 30 jours minimum (jamais détruire trop vite une
+   * trace métier), 730 (2 ans) maximum. Recommandation : 180.
+   */
+  KREIZ_CONTACT_RETENTION_DAYS: z.coerce
+    .number()
+    .int()
+    .min(CONTACT_RETENTION_DAYS_MIN)
+    .max(CONTACT_RETENTION_DAYS_MAX)
+    .optional(),
 }).superRefine((value, ctx) => {
   const hasUrl = value.KREIZ_MAIL_WEBHOOK_URL !== undefined && value.KREIZ_MAIL_WEBHOOK_URL !== '';
   const hasFrom = value.KREIZ_MAIL_FROM_EMAIL !== undefined && value.KREIZ_MAIL_FROM_EMAIL !== '';
@@ -120,6 +147,13 @@ export type KreizAdminEnv = {
   secret: string;
   /** URL du deploy hook, ou `null` si aucun moteur de rebuild n'est configuré. */
   rebuildHookUrl: string | null;
+  /** Token du endpoint de maintenance, ou `null` — sans lui, refus total (503). */
+  maintenanceToken: string | null;
+  /**
+   * Rétention (jours) des demandes de contact traitées, ou `null` — sans
+   * valeur, aucune purge automatique.
+   */
+  contactRetentionDays: number | null;
   /** Configuration storage validée, ou `null` si aucun stockage n'est configuré. */
   storage: {
     endpoint: string;
@@ -173,6 +207,8 @@ export function parseKreizAdminEnv(env: unknown): KreizAdminEnv {
     databaseUrl: data.KREIZ_DATABASE_URL,
     secret: data.KREIZ_SECRET,
     rebuildHookUrl: data.KREIZ_REBUILD_DEPLOY_HOOK_URL ?? null,
+    maintenanceToken: data.KREIZ_MAINTENANCE_TOKEN ?? null,
+    contactRetentionDays: data.KREIZ_CONTACT_RETENTION_DAYS ?? null,
     storage,
     mail,
   };
@@ -205,6 +241,10 @@ export type KreizAdminRuntime = {
    * d'émission, idempotence). Server-side uniquement, jamais rendu.
    */
   secret: string;
+  /** Token du endpoint de maintenance, ou `null` — sans lui, refus total. */
+  maintenanceToken: string | null;
+  /** Rétention (jours) des demandes contact traitées, ou `null` (désactivée). */
+  contactRetentionDays: number | null;
 };
 
 export function createKreizAdminRuntime(env: KreizAdminEnv, options: { allowInsecureRebuildHook?: boolean; allowInsecureMailWebhook?: boolean } = {}): KreizAdminRuntime {
@@ -250,6 +290,8 @@ export function createKreizAdminRuntime(env: KreizAdminEnv, options: { allowInse
     mailer,
     mailFrom: env.mail?.from ?? null,
     secret: env.secret,
+    maintenanceToken: env.maintenanceToken,
+    contactRetentionDays: env.contactRetentionDays,
   };
 }
 
@@ -267,6 +309,8 @@ export function getKreizAdminRuntime(): KreizAdminRuntime {
     env.databaseUrl,
     env.secret,
     env.rebuildHookUrl ?? '',
+    env.maintenanceToken ?? '',
+    String(env.contactRetentionDays ?? ''),
     env.storage?.endpoint ?? '',
     env.storage?.bucket ?? '',
     env.storage?.accessKeyId ?? '',
@@ -279,7 +323,15 @@ export function getKreizAdminRuntime(): KreizAdminRuntime {
     env.mail?.from.name ?? '',
   ].join('\u0000');
   if (cachedRuntime?.key !== key) {
-    const prod = import.meta.env?.PROD === true;
+    // Mode production lu dans `process.env.NODE_ENV` **à l'exécution**
+    // (revue sécurité finale) : toute forme d'`import.meta.env` ici fait
+    // incrusteter au bundler un **snapshot de process.env du build**
+    // (KREIZ_SECRET, URL de base…) dans le chunk serveur déployé — preuve
+    // faite en revue (Vite remplace parfois l'accès statiquement, parfois
+    // abaisse l'objet entier avec les valeurs du build : imprévisible par
+    // module). `process.env.NODE_ENV` n'est jamais inliné et vaut
+    // `production` sur Vercel comme dans un build Astro.
+    const prod = process.env.NODE_ENV === 'production';
     cachedRuntime = {
       key,
       runtime: createKreizAdminRuntime(env, {

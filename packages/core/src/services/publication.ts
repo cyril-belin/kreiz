@@ -68,6 +68,17 @@ export const PUBLICATION_AUDIT_ACTIONS = {
   rebuildFailed: 'site.rebuild_failed',
 } as const;
 
+/** Extrait le code d'erreur PostgreSQL (23505…) d'une erreur driver/Drizzle. */
+function pgErrorCode(error: unknown): string | null {
+  let current: unknown = error;
+  while (typeof current === 'object' && current !== null) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return null;
+}
+
 export type PublicationServiceDeps = {
   entries: ContentEntriesRepository;
   /** Repository médias — validation de la couverture à la publication (slice 5). */
@@ -263,6 +274,26 @@ export function createPublicationService(deps: PublicationServiceDeps) {
         validated.data,
       );
 
+      // Espace d'URL public (revue sécurité finale) : le **nouveau** chemin
+      // public `(namespace, slug courant)` ne doit pas être déjà figé par un
+      // autre contenu publié vivant. Sans cette garde (et sans l'index
+      // unique `published_path_active_key`), le flux « publier x → renommer
+      // le brouillon → recréer x → publier » manufacture deux pages publiées
+      // sur la même URL. Refus amical avant toute écriture ; l'index reste
+      // l'arbitre final des publications concurrentes (23505 → même erreur).
+      if (
+        await entries.publishedPathOccupiedByOther(
+          existing.routeNamespace,
+          existing.slug,
+          { excludeId: existing.id },
+        )
+      ) {
+        throw new PublishedPathOccupiedError(
+          existing.id,
+          publicPath(existing.routeNamespace, existing.slug),
+        );
+      }
+
       // Plan de redirection — uniquement si le slug **public** change
       // (mission §18 : un changement de slug d'un simple draft ne crée
       // jamais de redirect ; un contenu jamais publié n'a pas d'URL
@@ -309,17 +340,31 @@ export function createPublicationService(deps: PublicationServiceDeps) {
       }
 
       // Point de bascule : fige le dernier état public (couverture comprise,
-      // mission slice 5 §28) et bascule le statut.
-      const published = await entries.markPublished(existing.id, {
-        publishedAt: existing.publishedAt ?? now,
-        publishedSlug: existing.slug,
-        publishedTitle: validated.title,
-        publishedData: validated.data,
-        publishedSeo: existing.seo,
-        publishedCoverMediaId: existing.coverMediaId,
-        updatedBy: input.actorAdminId,
-        updatedAt: now,
-      });
+      // mission slice 5 §28) et bascule le statut. L'index unique partiel
+      // `published_path_active_key` arbitre les publications concurrentes du
+      // même chemin public : une violation 23505 est traduite dans le même
+      // refus métier que le pré-contrôle (jamais d'erreur SQL brute remontée).
+      let published: KreizContentEntry | null;
+      try {
+        published = await entries.markPublished(existing.id, {
+          publishedAt: existing.publishedAt ?? now,
+          publishedSlug: existing.slug,
+          publishedTitle: validated.title,
+          publishedData: validated.data,
+          publishedSeo: existing.seo,
+          publishedCoverMediaId: existing.coverMediaId,
+          updatedBy: input.actorAdminId,
+          updatedAt: now,
+        });
+      } catch (error) {
+        if (pgErrorCode(error) === '23505') {
+          throw new PublishedPathOccupiedError(
+            input.entryId,
+            publicPath(existing.routeNamespace, existing.slug),
+          );
+        }
+        throw error;
+      }
       if (!published) {
         // Supprimé entre la lecture et l'écriture.
         throw new ContentDeletedError(input.entryId);

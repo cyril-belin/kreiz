@@ -118,6 +118,19 @@ describe('adapter S3 — serveur S3 local réel (SigV4 prouvé)', () => {
     expect(get.status).toBe(200);
   });
 
+  it('read plafonné : un objet plus grand que maxBytes échoue, jamais bufferisé (revue sécurité finale)', async () => {
+    const key = 'media/55555555-5555-4555-8555-555555555555/original';
+    const body = new Uint8Array(64).fill(7);
+    await storage.put({ key, body, contentType: 'application/octet-stream' });
+    // Borne announced (Content-Length) et borne réelle (streaming) : les deux chemins échouent proprement.
+    await expect(storage.read(key, { maxBytes: 16 })).rejects.toThrow(/borne de lecture/);
+    const read = await storage.read(key, { maxBytes: 128 });
+    expect(read?.byteLength).toBe(64);
+    // Sans borne : comportement historique inchangé.
+    const unbounded = await storage.read(key);
+    expect(unbounded?.byteLength).toBe(64);
+  });
+
   it('deleteMany supprime les objets et tolère les absents', async () => {
     const key = 'media/55555555-5555-4555-8555-555555555555/original';
     await storage.put({ key, body: new Uint8Array([9]), contentType: 'image/png' });

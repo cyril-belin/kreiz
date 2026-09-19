@@ -105,6 +105,14 @@ export const contentEntries = pgTable(
     uniqueIndex('kreiz_content_entries_namespace_slug_active_key')
       .on(table.routeNamespace, table.slug)
       .where(sql`${table.deletedAt} is null`),
+    // Unicité de l'espace d'URL **public** : deux contenus publiés vivants ne
+    // peuvent pas figer le même `published_slug` dans un namespace (revue
+    // sécurité finale — l'espace public est `published_slug`, pas le slug
+    // éditorial ; sans cet index, le flux « publier x → renommer le brouillon
+    // → recréer x » manufacture une collision invisible jusqu'au build).
+    uniqueIndex('kreiz_content_entries_published_path_active_key')
+      .on(table.routeNamespace, table.publishedSlug)
+      .where(sql`${table.status} = 'published' and ${table.deletedAt} is null`),
     // Listings admin et build par type/statut/date (cadrage §7).
     index('kreiz_content_entries_type_status_published_idx').on(
       table.contentType,
