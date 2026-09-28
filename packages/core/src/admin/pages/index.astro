@@ -40,64 +40,68 @@ const newContactRequests = await access.runtime.contact.countNew();
     </div>
   )}
 
-  <section class="kz-panel" aria-labelledby="kz-welcome-title">
-    <h2 class="kz-panel__title" id="kz-welcome-title">
-      Bienvenue, {access.access.admin.name}
-    </h2>
-    <p class="kz-panel__text">
-      Vous êtes authentifié·e. Gérez les contenus déclarés par le projet depuis
-      la section « Contenu » ; la mesure d'audience privacy-first est
-      disponible dans « Analyse → Analytics ».
-    </p>
-    <dl>
-      <dt>Session</dt>
-      <dd>
-        active — expiration glissante le{' '}
-        {access.access.session.expiresAt.toLocaleString('fr-FR')}
-      </dd>
-      <dt>Limite absolue</dt>
-      <dd>{access.access.session.absoluteExpiresAt.toLocaleDateString('fr-FR')}</dd>
-    </dl>
-  </section>
+  <div class="kz-dashboard">
+    <section class="kz-panel" aria-labelledby="kz-welcome-title">
+      <h2 class="kz-panel__title" id="kz-welcome-title">
+        Bienvenue, {access.access.admin.name}
+      </h2>
+      <p class="kz-panel__text">
+        Vous êtes authentifié·e. Gérez les contenus déclarés par le projet depuis
+        la section « Contenu » ; la mesure d'audience privacy-first est
+        disponible dans « Analyse → Analytics ».
+      </p>
+      <dl>
+        <dt>Session</dt>
+        <dd>
+          active — expiration glissante le{' '}
+          {access.access.session.expiresAt.toLocaleString('fr-FR')}
+        </dd>
+        <dt>Limite absolue</dt>
+        <dd>{access.access.session.absoluteExpiresAt.toLocaleDateString('fr-FR')}</dd>
+      </dl>
+    </section>
 
-  <section class="kz-panel" aria-labelledby="kz-contact-title">
-    <h2 class="kz-panel__title" id="kz-contact-title">Boîte de contact</h2>
-    <p class="kz-panel__text">
-      {newContactRequests === 0
-        ? 'Aucune demande de contact non traitée.'
-        : `${newContactRequests} demande${newContactRequests > 1 ? 's' : ''} de contact à traiter.`}
-    </p>
-    <p>
-      <a class="kz-button" href="/admin/forms">Ouvrir la boîte de contact</a>
-    </p>
-  </section>
+    <div class="kz-dashboard__row">
+      <section class="kz-panel" aria-labelledby="kz-contact-title">
+        <h2 class="kz-panel__title" id="kz-contact-title">Boîte de contact</h2>
+        <p class="kz-panel__text">
+          {newContactRequests === 0
+            ? 'Aucune demande de contact non traitée.'
+            : `${newContactRequests} demande${newContactRequests > 1 ? 's' : ''} de contact à traiter.`}
+        </p>
+        <p>
+          <a class="kz-button" href="/admin/forms">Ouvrir la boîte de contact</a>
+        </p>
+      </section>
 
-  <section class="kz-panel" aria-labelledby="kz-site-title">
-    <h2 class="kz-panel__title" id="kz-site-title">Site public</h2>
-    <p class="kz-panel__text">
-      Le site public est statique : il ne change qu'à chaque reconstruction.
-      Les publications et dépublications la demandent automatiquement
-      {rebuildProvider ? 'via le deploy hook configuré.' : ' — aucun moteur n’est actuellement configuré.'}
-    </p>
-    <dl>
-      <dt>Reconstruction</dt>
-      <dd>
-        {rebuildProvider === 'vercel-deploy-hook'
-          ? 'automatique (deploy hook Vercel)'
-          : 'non configurée — les publications restent en base sans mettre le site à jour'}
-      </dd>
-      <dt>Dernier site valide</dt>
-      <dd>
-        reste servi tant qu'un nouveau build n'a pas réussi — un échec de
-        reconstruction n'endommage jamais le site en ligne.
-      </dd>
-    </dl>
-    {rebuildProvider && (
-      <form method="post" action={ADMIN_REBUILD_PATH}>
-        <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
-        <input type="hidden" name="return_to" value="/admin" />
-        <button class="kz-button" type="submit">Reconstruire le site</button>
-      </form>
-    )}
-  </section>
+      <section class="kz-panel" aria-labelledby="kz-site-title">
+        <h2 class="kz-panel__title" id="kz-site-title">Site public</h2>
+        <p class="kz-panel__text">
+          Le site public est statique : il ne change qu'à chaque reconstruction.
+          Les publications et dépublications la demandent automatiquement
+          {rebuildProvider ? 'via le deploy hook configuré.' : ' — aucun moteur n’est actuellement configuré.'}
+        </p>
+        <dl>
+          <dt>Reconstruction</dt>
+          <dd>
+            {rebuildProvider === 'vercel-deploy-hook'
+              ? 'automatique (deploy hook Vercel)'
+              : 'non configurée — les publications restent en base sans mettre le site à jour'}
+          </dd>
+          <dt>Dernier site valide</dt>
+          <dd>
+            reste servi tant qu'un nouveau build n'a pas réussi — un échec de
+            reconstruction n'endommage jamais le site en ligne.
+          </dd>
+        </dl>
+        {rebuildProvider && (
+          <form method="post" action={ADMIN_REBUILD_PATH}>
+            <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
+            <input type="hidden" name="return_to" value="/admin" />
+            <button class="kz-button" type="submit">Reconstruire le site</button>
+          </form>
+        )}
+      </section>
+    </div>
+  </div>
 </AdminShell>

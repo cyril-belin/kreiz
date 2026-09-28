@@ -126,7 +126,7 @@ else if (Astro.request.method === 'POST') {
         )}
         <input type="hidden" name={CSRF_FORM_FIELD} value={access.access.csrfToken} />
 
-        <div class="kz-field">
+        <div class="kz-field kz-field--hero">
           <label class="kz-label" for="kz-title">
             Titre<span class="kz-required" aria-hidden="true"> *</span>
           </label>
@@ -136,6 +136,7 @@ else if (Astro.request.method === 'POST') {
             id="kz-title"
             name="title"
             value={formTitle}
+            placeholder="Le titre du contenu"
             required
             aria-invalid={fieldErrors.title ? 'true' : undefined}
           />

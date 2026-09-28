@@ -55,6 +55,28 @@ function maxDailyPageviews(data: AnalyticsDashboard): number {
 function barHeight(value: number, max: number): string {
   return `${Math.max(2, Math.round((value / max) * 100))}%`;
 }
+
+/**
+ * Série comblée : un slot par jour de la période (UTC), zéro si silence.
+ * L'agrégation SQL ne retourne que les jours actifs — sans comblement, deux
+ * jours d'activité sur trente dessineraient deux dalles pleines et l'axe
+ * temporel mentirait. Les jours muets restent visibles comme un talon de
+ * 2 % (baseline), la barre active garde sa proportion réelle.
+ */
+function filledDailySeries(
+  data: AnalyticsDashboard,
+  days: number,
+): Array<{ day: string; pageviews: number }> {
+  const byDay = new Map(data.daily.map((entry) => [entry.day, entry.pageviews]));
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const series: Array<{ day: string; pageviews: number }> = [];
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const day = new Date(todayUtc - offset * 86_400_000).toISOString().slice(0, 10);
+    series.push({ day, pageviews: byDay.get(day) ?? 0 });
+  }
+  return series;
+}
 ---
 
 <AdminShell
@@ -128,8 +150,8 @@ function barHeight(value: number, max: number): string {
           {dashboard.daily.length === 0 ? (
             <p class="kz-panel__text">Aucune page vue sur la période.</p>
           ) : (
-            <div class="kz-bars" role="img" aria-label="Pages vues par jour">
-              {dashboard.daily.map((entry) => (
+            <div class="kz-bars" role="img" aria-label={`Pages vues par jour sur ${period} jours`}>
+              {filledDailySeries(dashboard, period).map((entry) => (
                 <div
                   class="kz-bars__bar"
                   style={`height: ${barHeight(entry.pageviews, maxDailyPageviews(dashboard))}`}

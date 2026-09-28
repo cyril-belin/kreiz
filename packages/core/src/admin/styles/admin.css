@@ -1,25 +1,55 @@
 /*
  * Kreiz admin — styles partagés du back-office (login + shell).
  *
- * Outil interne : sobre, dense mais lisible, accessible (focus visible,
- * contrastes AA), responsive sans overflow horizontal. Pas de
- * glassmorphism, pas de gradients décoratifs, pas d'animations.
- * Ce CSS est autonome — le shell n'exige ni Tailwind ni configuration
- * CSS du projet consommateur.
+ * Identité « atelier éditorial » (alignée sur la vitrine Kreiz) : papier
+ * chaud, encre profonde, accent rouille unique, Fraunces pour les éléments
+ * display (marque, titres, aire d'écriture), sans-serif système pour la
+ * densité de l'outil. Outil interne : sobre, dense mais lisible, accessible
+ * (focus visible, contrastes AA), responsive sans overflow horizontal.
+ * Pas de glassmorphism, pas de gradients décoratifs, pas d'animations —
+ * seules des transitions de couleur courtes (120 ms, réduites via
+ * prefers-reduced-motion). Ce CSS est autonome — le shell n'exige ni
+ * Tailwind ni configuration CSS du projet consommateur ; la police
+ * Fraunces est résolue par le Vite du consommateur (dépendance du paquet).
  */
 
+@import '@fontsource-variable/fraunces/wght.css';
+@import '@fontsource-variable/fraunces/wght-italic.css';
+
 :root {
-  --kz-bg: #f5f6f8;
+  --kz-bg: #f6f3ed;
   --kz-surface: #ffffff;
-  --kz-border: #d8dce1;
-  --kz-text: #1c2430;
-  --kz-text-muted: #5b6673;
-  --kz-accent: #1f4fd8;
-  --kz-accent-hover: #1a44ba;
-  --kz-accent-soft: #e9effc;
-  --kz-danger-bg: #fdeeee;
-  --kz-danger-border: #e5b9b9;
+  --kz-surface-soft: #fbf9f4;
+  --kz-border: #e4dfd5;
+  --kz-border-strong: #d3ccc0;
+  --kz-text: #1c1917;
+  --kz-text-muted: #6f6a60;
+  --kz-ink: #1c1917;
+  --kz-paper: #faf7f1;
+  --kz-accent: #b0522d;
+  --kz-accent-hover: #8f411f;
+  --kz-accent-soft: #f6e9e0;
+  --kz-danger-bg: #fbeeec;
+  --kz-danger-border: #e5b9a9;
   --kz-danger-text: #8e2626;
+  --kz-radius: 12px;
+  --kz-radius-sm: 8px;
+  --kz-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 8px 24px rgba(28, 25, 23, 0.05);
+  --kz-shadow-raised: 0 1px 2px rgba(28, 25, 23, 0.05), 0 16px 40px rgba(28, 25, 23, 0.08);
+  --kz-font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  /*
+   * Composition spatiale — source unique du layout (desktop → ultrawide).
+   * Le contenu principal vit dans un container centré borné : sur grand
+   * écran les marges sont auto (vide intentionnel), jamais un étirement.
+   * Une seule logique, aucun max-width dispersé dans les pages.
+   */
+  --kz-sidebar-width: 240px;
+  --kz-content-max: 1400px;
+  --kz-content-pad: 28px;
+  /* Colonne d'écriture + sidebar d'édition (atelier). */
+  --kz-editor-max: 1180px;
+  /* Blocs de concentration : uploader média, graphiques analytics. */
+  --kz-focused-max: 860px;
 }
 
 * {
@@ -34,6 +64,25 @@ body {
   color: var(--kz-text);
   background: var(--kz-bg);
   -webkit-text-size-adjust: 100%;
+}
+
+a,
+.kz-button,
+.kz-nav__link,
+.kz-row-action,
+.kz-richtext__button {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
 }
 
 :focus-visible {
@@ -55,20 +104,53 @@ body {
   max-width: 380px;
   background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
-  padding: 28px;
+  border-radius: var(--kz-radius);
+  box-shadow: var(--kz-shadow-raised);
+  padding: 32px 28px 28px;
+  text-align: center;
+}
+
+.kz-login__ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--kz-accent);
+  font-size: 15px;
+}
+
+.kz-login__ornament::before,
+.kz-login__ornament::after {
+  content: '';
+  width: 36px;
+  height: 1px;
+  background: var(--kz-accent);
+  opacity: 0.45;
 }
 
 .kz-login__brand {
   margin: 0 0 4px;
-  font-size: 18px;
-  font-weight: 650;
+  font-family: var(--kz-font-display);
+  font-size: 30px;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -0.01em;
 }
 
 .kz-login__subtitle {
-  margin: 0 0 20px;
+  margin: 0 0 24px;
   font-size: 14px;
   color: var(--kz-text-muted);
+}
+
+.kz-login__card .kz-field {
+  text-align: left;
+}
+
+.kz-login__card .kz-button {
+  width: 100%;
+  margin-top: 4px;
 }
 
 .kz-field {
@@ -84,21 +166,35 @@ body {
 
 .kz-input {
   width: 100%;
-  padding: 9px 10px;
-  border: 1px solid var(--kz-border);
-  border-radius: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--kz-border-strong);
+  border-radius: var(--kz-radius-sm);
   font: inherit;
   color: inherit;
   background: var(--kz-surface);
+}
+
+.kz-input:hover {
+  border-color: #b9b1a2;
+}
+
+.kz-input:focus {
+  outline: none;
+  border-color: var(--kz-accent);
+  box-shadow: 0 0 0 3px var(--kz-accent-soft);
+}
+
+.kz-input[aria-invalid='true'] {
+  border-color: var(--kz-danger-border);
 }
 
 .kz-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 9px 14px;
+  padding: 9px 16px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--kz-radius-sm);
   font: inherit;
   font-weight: 600;
   color: #ffffff;
@@ -112,19 +208,20 @@ body {
 
 .kz-button--ghost {
   color: var(--kz-text);
-  background: transparent;
-  border-color: var(--kz-border);
+  background: var(--kz-surface);
+  border-color: var(--kz-border-strong);
 }
 
 .kz-button--ghost:hover {
-  background: var(--kz-bg);
+  background: var(--kz-surface-soft);
+  border-color: var(--kz-text-muted);
 }
 
 .kz-alert {
   margin: 0 0 16px;
   padding: 10px 12px;
   border: 1px solid var(--kz-danger-border);
-  border-radius: 6px;
+  border-radius: var(--kz-radius-sm);
   font-size: 14px;
   color: var(--kz-danger-text);
   background: var(--kz-danger-bg);
@@ -141,37 +238,50 @@ body {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  width: 220px;
+  width: var(--kz-sidebar-width);
   background: var(--kz-surface);
   border-right: 1px solid var(--kz-border);
 }
 
 .kz-sidebar__brand {
-  padding: 16px 18px;
+  padding: 18px 20px 16px;
   border-bottom: 1px solid var(--kz-border);
-  font-weight: 650;
+  font-family: var(--kz-font-display);
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .kz-sidebar__brand small {
   display: block;
-  font-size: 11px;
-  font-weight: 400;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--kz-text-muted);
+  margin-top: 2px;
 }
 
 .kz-nav {
   flex: 1;
-  padding: 10px;
+  padding: 12px;
   overflow-y: auto;
 }
 
 .kz-nav__section {
-  margin: 14px 8px 4px;
-  font-size: 11px;
+  margin: 16px 10px 5px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--kz-text-muted);
+}
+
+.kz-nav__section:first-child {
+  margin-top: 4px;
 }
 
 .kz-nav__link {
@@ -179,8 +289,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 10px;
-  border-radius: 6px;
+  padding: 7px 12px;
+  border-radius: var(--kz-radius-sm);
   font-size: 14px;
   color: var(--kz-text);
   text-decoration: none;
@@ -191,8 +301,8 @@ body {
 }
 
 .kz-nav__link[aria-current='page'] {
-  background: var(--kz-accent-soft);
-  color: var(--kz-accent);
+  background: var(--kz-ink);
+  color: var(--kz-paper);
   font-weight: 600;
 }
 
@@ -207,7 +317,7 @@ body {
 
 .kz-nav__badge {
   padding: 1px 7px;
-  border: 1px solid var(--kz-border);
+  border: 1px solid var(--kz-border-strong);
   border-radius: 999px;
   font-size: 10px;
   color: var(--kz-text-muted);
@@ -221,19 +331,33 @@ body {
 }
 
 .kz-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 24px;
+  padding-block: 14px;
   background: var(--kz-surface);
   border-bottom: 1px solid var(--kz-border);
 }
 
+/*
+ * Contenu interne de la topbar aligné sur le container principal : titre,
+ * utilisateur et déconnexion partagent les mêmes bords que le contenu des
+ * pages — jamais un utilisateur « à 3 kilomètres » à droite sur ultrawide.
+ */
+.kz-topbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: var(--kz-content-max);
+  margin-inline: auto;
+  padding-inline: var(--kz-content-pad);
+}
+
 .kz-topbar__title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 650;
+  font-family: var(--kz-font-display);
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
 }
 
 .kz-user {
@@ -259,15 +383,17 @@ body {
 
 .kz-content {
   width: 100%;
-  max-width: 960px;
-  padding: 24px;
+  max-width: var(--kz-content-max);
+  margin-inline: auto;
+  padding: var(--kz-content-pad);
 }
 
 .kz-panel {
-  padding: 20px;
+  padding: 22px 24px;
   background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius);
+  box-shadow: var(--kz-shadow);
 }
 
 .kz-panel__title {
@@ -294,6 +420,25 @@ body {
 
 .kz-panel dd {
   margin: 0;
+}
+
+/* ——— Dashboard : densité sur grand écran ——— */
+
+/*
+ * Le panneau d'accueil reste pleine largeur ; les panneaux d'état se
+ * partagent la ligne (2 colonnes dès que la place le permet, empilés
+ * sinon). Le dashboard gagne en densité sans devenir un tableau KPI.
+ */
+.kz-dashboard {
+  display: grid;
+  gap: 16px;
+}
+
+.kz-dashboard__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
 /* ——— Contenu : index des types ——— */
@@ -339,22 +484,22 @@ body {
 
 .kz-banner {
   margin-bottom: 16px;
-  padding: 10px 12px;
-  border-radius: 6px;
+  padding: 11px 14px;
+  border-radius: var(--kz-radius-sm);
   font-size: 14px;
 }
 
 .kz-banner--success {
-  border: 1px solid #b9dcc0;
+  border: 1px solid #bcd9c2;
   color: #1d5c31;
-  background: #eaf6ee;
+  background: #eef6ef;
 }
 
 /* Avertissement publication : échec de rebuild, conflit d'adresse, contenu invalide. */
 .kz-banner--warning {
-  border: 1px solid #e6d3a3;
-  color: #7a5a12;
-  background: #fdf6e4;
+  border: 1px solid #e4d0a0;
+  color: #77571a;
+  background: #fcf5e5;
 }
 
 .kz-panel--info {
@@ -362,7 +507,7 @@ body {
 }
 
 .kz-panel--success {
-  border-color: #b9dcc0;
+  border-color: #bcd9c2;
 }
 
 .kz-panel--error {
@@ -378,7 +523,8 @@ body {
 .kz-table-wrapper {
   background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius);
+  box-shadow: var(--kz-shadow);
   overflow-x: auto;
 }
 
@@ -390,19 +536,23 @@ body {
 
 .kz-table th,
 .kz-table td {
-  padding: 10px 14px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--kz-border);
   text-align: left;
   vertical-align: middle;
 }
 
 .kz-table thead th {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--kz-text-muted);
-  background: var(--kz-bg);
+  background: var(--kz-surface-soft);
+}
+
+.kz-table tbody tr:hover {
+  background: var(--kz-surface-soft);
 }
 
 .kz-table tbody tr:last-child td {
@@ -427,22 +577,22 @@ body {
 
 .kz-badge {
   display: inline-block;
-  padding: 2px 9px;
+  padding: 2px 10px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
 }
 
 .kz-badge--draft {
-  border: 1px solid #cfd8e3;
+  border: 1px solid var(--kz-border-strong);
   color: var(--kz-text-muted);
-  background: var(--kz-bg);
+  background: var(--kz-surface-soft);
 }
 
 .kz-badge--published {
-  border: 1px solid #b9dcc0;
+  border: 1px solid #bcd9c2;
   color: #1d5c31;
-  background: #eaf6ee;
+  background: #eef6ef;
 }
 
 /* Badge « modifications non publiées » (listing + édition). */
@@ -512,11 +662,25 @@ body {
 
 /* ——— Contenu : formulaires générés ——— */
 
+/*
+ * Formulaire autonome (création, boîte de contact) : colonne centrée bornée
+ * — les champs de saisie ne s'étirent jamais sur toute la largeur disponible.
+ * L'atelier d'édition échappe à cette borne : sa largeur est gouvernée par
+ * la grille .kz-editor-grid (colonne d'écriture + sidebar d'état).
+ */
 .kz-form {
-  padding: 20px;
+  padding: 24px;
   background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius);
+  box-shadow: var(--kz-shadow);
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+.kz-form.kz-editor-main {
+  max-width: none;
 }
 
 .kz-help {
@@ -584,6 +748,101 @@ body {
   background: var(--kz-danger-bg);
 }
 
+/* ——— Atelier d'écriture : édition de contenu ——— */
+
+/*
+ * Grille éditoriale deux colonnes : colonne principale (titre hero, slug,
+ * champs, éditeur) + colonne latérale (état de publication, actions,
+ * couverture, SEO). La colonne latérale suit le défilement jusqu'à son
+ * pied — l'admin garde toujours ses actions sous les yeux.
+ */
+.kz-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+  max-width: var(--kz-editor-max);
+  margin-inline: auto;
+  width: 100%;
+}
+
+.kz-editor-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.kz-editor-aside {
+  position: sticky;
+  top: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.kz-editor-aside .kz-panel,
+.kz-editor-aside .kz-form {
+  box-shadow: var(--kz-shadow);
+}
+
+/* Titre du contenu : champ hero — grand, sans le langage « input ». */
+.kz-field--hero .kz-input {
+  padding: 10px 2px 8px;
+  border: 0;
+  border-bottom: 2px solid var(--kz-border-strong);
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--kz-font-display);
+  font-size: 26px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+
+.kz-field--hero .kz-input:hover {
+  border-bottom-color: #b9b1a2;
+}
+
+.kz-field--hero .kz-input:focus {
+  border-bottom-color: var(--kz-accent);
+  box-shadow: none;
+}
+
+.kz-field--hero .kz-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--kz-text-muted);
+}
+
+.kz-field--hero .kz-input::placeholder {
+  color: #b9b1a2;
+  font-style: italic;
+}
+
+/* Panneau latéral : titre de section en petites capitales espacées. */
+.kz-aside-title {
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--kz-text-muted);
+}
+
+.kz-aside-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.kz-aside-actions .kz-button {
+  width: 100%;
+  text-decoration: none;
+}
+
+.kz-aside-actions form {
+  display: contents;
+}
+
 /* ——— Preview (page d'erreur uniquement) ——— */
 
 .kz-preview-error {
@@ -599,6 +858,16 @@ body {
 }
 
 /* ——— Responsive (1440 → 1024 → 768 → 390) ——— */
+
+@media (max-width: 1180px) {
+  .kz-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kz-editor-aside {
+    position: static;
+  }
+}
 
 @media (max-width: 1024px) {
   .kz-sidebar {
@@ -635,6 +904,10 @@ body {
 
   .kz-content {
     padding: 16px;
+  }
+
+  .kz-topbar__inner {
+    padding-inline: 16px;
   }
 
   .kz-content-card,
@@ -708,6 +981,7 @@ body {
   display: grid;
   gap: 12px;
   margin-bottom: 20px;
+  max-width: var(--kz-focused-max);
 }
 
 .kz-media-upload__controls {
@@ -723,7 +997,7 @@ body {
 .kz-media-upload__state progress {
   width: 100%;
   height: 10px;
-  accent-color: var(--kz-accent, #2563eb);
+  accent-color: var(--kz-accent);
 }
 
 .kz-media-grid {
@@ -736,18 +1010,19 @@ body {
 }
 
 .kz-media-card {
-  border: 1px solid var(--kz-border, #e2e8f0);
-  border-radius: 10px;
+  border: 1px solid var(--kz-border);
+  border-radius: var(--kz-radius);
   overflow: hidden;
-  background: var(--kz-surface, #fff);
+  background: var(--kz-surface);
   display: flex;
   flex-direction: column;
+  box-shadow: var(--kz-shadow);
 }
 
 .kz-media-card__preview {
   position: relative;
   background:
-    repeating-conic-gradient(var(--kz-checker, #f1f5f9) 0% 25%, transparent 0% 50%) 0 0 / 20px 20px;
+    repeating-conic-gradient(var(--kz-surface-soft) 0% 25%, transparent 0% 50%) 0 0 / 20px 20px;
   aspect-ratio: 16 / 9;
   display: flex;
   align-items: center;
@@ -764,8 +1039,8 @@ body {
 .kz-media-card__placeholder {
   width: 42%;
   height: 42%;
-  border-radius: 8px;
-  background: var(--kz-border, #e2e8f0);
+  border-radius: var(--kz-radius-sm);
+  background: var(--kz-border);
 }
 
 .kz-media-card__preview .kz-badge {
@@ -783,7 +1058,7 @@ body {
 .kz-media-card__meta {
   margin: 0;
   font-size: 12px;
-  color: var(--kz-text-muted, #64748b);
+  color: var(--kz-text-muted);
   overflow-wrap: anywhere;
 }
 
@@ -810,9 +1085,9 @@ body {
   max-width: 320px;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border: 1px solid var(--kz-border, #e2e8f0);
-  border-radius: 8px;
-  background: var(--kz-checker, #f1f5f9);
+  border: 1px solid var(--kz-border);
+  border-radius: var(--kz-radius-sm);
+  background: var(--kz-surface-soft);
 }
 
 .kz-cover-field__link {
@@ -837,7 +1112,7 @@ body {
   padding: 6px;
   background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--kz-radius-sm) var(--kz-radius-sm) 0 0;
 }
 
 .kz-richtext__group {
@@ -856,7 +1131,7 @@ body {
   border: 1px solid transparent;
   background: none;
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 4px 9px;
   font: inherit;
   font-size: 13px;
   color: var(--kz-text);
@@ -880,7 +1155,7 @@ body {
 
 .kz-richtext__frame {
   border: 1px solid var(--kz-border);
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--kz-radius-sm) var(--kz-radius-sm);
   border-top: none;
   background: var(--kz-surface);
 }
@@ -889,18 +1164,25 @@ body {
   border-color: var(--kz-danger-border);
 }
 
+/*
+ * Aire d'écriture « document » : Fraunces — on rédige dans la typographie
+ * de la maison, la largeur de colonne reste celle d'une page lisible.
+ */
 .kz-richtext__content {
   max-width: 72ch;
-  min-height: 220px;
-  padding: 16px 20px;
+  min-height: 260px;
+  padding: 20px 24px;
   outline: none;
   overflow-wrap: break-word;
+  font-family: var(--kz-font-display);
+  font-size: 16.5px;
+  line-height: 1.65;
 }
 
 .kz-richtext__content:focus {
   outline: 2px solid var(--kz-accent);
   outline-offset: -2px;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--kz-radius-sm) var(--kz-radius-sm);
 }
 
 .kz-richtext__content p:first-child {
@@ -910,20 +1192,21 @@ body {
 .kz-richtext__content blockquote {
   margin: 12px 0;
   padding: 4px 16px;
-  border-left: 3px solid var(--kz-border);
+  border-left: 3px solid var(--kz-accent);
   color: var(--kz-text-muted);
+  font-style: italic;
 }
 
 .kz-richtext__content pre {
-  background: #f0f2f5;
-  border-radius: 6px;
+  background: #f4f1ea;
+  border-radius: var(--kz-radius-sm);
   padding: 12px;
   overflow-x: auto;
 }
 
 .kz-richtext__content code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.92em;
+  font-size: 0.86em;
 }
 
 .kz-richtext__content .ProseMirror-selectednode {
@@ -939,14 +1222,14 @@ body {
 
 .kz-richtext-media img {
   max-width: 100%;
-  border-radius: 6px;
+  border-radius: var(--kz-radius-sm);
   border: 1px solid var(--kz-border);
 }
 
 .kz-richtext-media--missing {
   border: 1px dashed var(--kz-danger-border);
   background: var(--kz-danger-bg);
-  border-radius: 6px;
+  border-radius: var(--kz-radius-sm);
   padding: 12px;
 }
 
@@ -957,7 +1240,7 @@ body {
 
 .kz-richtext-media__caption {
   border: 1px solid var(--kz-border);
-  border-radius: 6px;
+  border-radius: var(--kz-radius-sm);
   padding: 4px 8px;
   font: inherit;
   font-size: 13px;
@@ -965,15 +1248,16 @@ body {
 
 .kz-richtext-dialog {
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius);
   padding: 20px;
   max-width: 560px;
   width: calc(100vw - 48px);
   max-height: min(70vh, 640px);
+  box-shadow: var(--kz-shadow-raised);
 }
 
 .kz-richtext-dialog::backdrop {
-  background: rgba(28, 36, 48, 0.45);
+  background: rgba(28, 25, 23, 0.45);
 }
 
 .kz-richtext-dialog__title {
@@ -1004,7 +1288,7 @@ body {
   gap: 6px;
   width: 100%;
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius-sm);
   background: var(--kz-surface);
   padding: 8px;
   font: inherit;
@@ -1042,9 +1326,10 @@ body {
 
 .kz-stat {
   padding: 14px 16px;
-  background: var(--kz-bg);
+  background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius-sm);
+  box-shadow: var(--kz-shadow);
 }
 
 .kz-stat__value {
@@ -1057,7 +1342,7 @@ body {
 .kz-stat__label {
   margin: 2px 0 0;
   color: var(--kz-text-muted);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .kz-bars {
@@ -1066,14 +1351,18 @@ body {
   gap: 3px;
   height: 140px;
   padding: 12px;
-  background: var(--kz-bg);
+  background: var(--kz-surface);
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius-sm);
+  max-width: var(--kz-focused-max);
 }
 
 .kz-bars__bar {
   flex: 1 1 0;
   min-width: 2px;
+  /* Plafond : avec peu de jours actifs, une barre ne devient jamais une
+     dalle pleine — la série complétée garde des barres lisibles. */
+  max-width: 26px;
   background: var(--kz-accent);
   border-radius: 2px 2px 0 0;
 }
@@ -1098,10 +1387,10 @@ body {
 /* ——— Section SEO du formulaire de contenu (slice 9) ——— */
 
 .kz-fieldset {
-  margin: 0 0 16px;
-  padding: 14px 16px 4px;
+  margin: 0;
+  padding: 16px 16px 4px;
   border: 1px solid var(--kz-border);
-  border-radius: 8px;
+  border-radius: var(--kz-radius-sm);
 }
 
 .kz-legend {
@@ -1123,5 +1412,5 @@ body {
 .kz-field--checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
-  accent-color: var(--kz-accent, #2563eb);
+  accent-color: var(--kz-accent);
 }
