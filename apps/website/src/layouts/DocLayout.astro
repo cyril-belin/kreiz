@@ -26,9 +26,10 @@ const rootUrl = Astro.site ? new URL(`${basePath}/`, Astro.site).href : `${baseP
 const ogImageUrl = new URL('og.png', rootUrl).href;
 
 const REPO_URL = 'https://github.com/cyril-belin/kreiz';
-// Archive GitHub servie avec Content-Disposition: attachment : le navigateur
-// télécharge sans quitter la page — lien simple, pas de nouvel onglet.
-const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
+// Asset « kreiz.zip » de la release « latest » (workflow kreiz-zip.yml) :
+// nom de fichier exact, servi en Content-Disposition: attachment —
+// téléchargement natif, sans quitter la page.
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/releases/download/latest/kreiz.zip';
 
 const neighbors = docNeighbors(pageId);
 ---

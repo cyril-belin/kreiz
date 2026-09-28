@@ -7,9 +7,10 @@ import Callout from '../../components/doc/Callout.astro';
 import CodeBlock from '../../components/doc/CodeBlock.astro';
 import { siteUrl } from '../../lib/urls';
 
-// Archive GitHub servie avec Content-Disposition: attachment : téléchargement
-// natif, sans quitter la page.
-const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
+// Asset « kreiz.zip » de la release « latest » (workflow kreiz-zip.yml) :
+// nom de fichier exact, servi en Content-Disposition: attachment —
+// téléchargement natif, sans quitter la page.
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/releases/download/latest/kreiz.zip';
 ---
 
 <DocLayout

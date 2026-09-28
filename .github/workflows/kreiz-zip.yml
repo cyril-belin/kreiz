@@ -1,0 +1,39 @@
+name: Publication de kreiz.zip
+
+# Publie l'archive du starter en asset de release nommé kreiz.zip — c'est le
+# fichier téléchargé par le CTA « Télécharger Kreiz » de la vitrine.
+# Les archives GitHub imposent le nom <repo>-<branche>.zip et il n'est pas
+# modifiable côté serveur ; l'asset de release, lui, porte exactement le nom
+# voulu (kreiz.zip, dossier racine kreiz/ une fois décompressé).
+# URL stable consommée par la vitrine :
+# https://github.com/cyril-belin/kreiz/releases/download/latest/kreiz.zip
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissions minimales : écriture des releases uniquement.
+permissions:
+  contents: write
+
+jobs:
+  kreiz-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construire kreiz.zip
+        run: git archive --format=zip --prefix=kreiz/ -o kreiz.zip HEAD
+
+      # gh est préinstallé sur les runners : pas d'action tierce.
+      # La release « latest » est créée au premier run puis son asset est
+      # remplacé (--clobber) à chaque push ; le tag reste volontairement fixe.
+      - name: Publier sur la release « latest »
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest > /dev/null 2>&1 || \
+            gh release create latest --title "Kreiz — téléchargement direct" \
+              --notes "Archive du starter, reconstruite à chaque push sur main." --latest
+          gh release upload latest kreiz.zip --clobber
