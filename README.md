@@ -7,84 +7,80 @@
 
 **Official website: https://cyril-belin.github.io/kreiz/**
 
-![Kreiz — Publiez sans page builder](docs/assets/landing-hero.jpg)
+![Kreiz — the admin manages content, the frontend controls presentation](docs/assets/landing-hero.jpg)
 
-Kreiz is a reusable editorial core for building professional, admin-managed, editorial
-and semi-static sites with Astro — without a page builder. It provides the editorial
-engine; each project provides branding, content types, templates and wording.
+Kreiz provides the editorial engine: a private admin, code-declared content
+types, a draft/publish model with frozen public snapshots, media, rich text,
+forms, analytics and SEO — compiled to a static-first public site. Each
+project keeps the frontend: templates, branding, content types and wording.
 
 > The back office manages content. The frontend controls presentation.
 
-## What Kreiz is — and is not
+## What is Kreiz?
 
-**Is**: a batteries-included editorial engine — private admin, code-declared
-content types, draft/publish model with frozen public snapshots, media
-pipeline, rich text, contact forms, privacy-first analytics, SEO — that
-compiles to a **static-first** public site (only the admin and small public
-endpoints run on a server).
+**Is**: a batteries-included editorial engine that compiles to a
+static-first public site — only the admin and small public endpoints run on
+a server. `Save ≠ Publish` is structural: the public build reads only frozen
+`published_*` snapshots; publishing requests a rebuild, and a failed rebuild
+never damages the served site.
 
 **Is not**: a page builder, a hosted CMS, a multi-role workflow tool, an
 e-commerce or newsletter platform. No plugin marketplace, no theme system.
-The Project owns its presentation, its schema and its migrations.
 
-**Philosophy — static-first**: `Save ≠ Publish` is structural. The public
-build reads only frozen `published_*` snapshots; publishing requests a
-rebuild (deploy hook) and a failed rebuild never damages the served site.
-The database is the source of truth; the static output is a projection.
+## Start here
 
-## Architecture in one minute
+- **Website** — <https://cyril-belin.github.io/kreiz/> — the product, in one page
+- **Documentation** — <https://cyril-belin.github.io/kreiz/docs/> — start, concepts, customize, deploy (in French)
+- **Build with AI** — <https://cyril-belin.github.io/kreiz/docs/ai/> — the master prompt for AI-assisted building
+- **Use this template** — <https://github.com/cyril-belin/kreiz/generate> — a project starts as a copy, not an npm install
+- **Developer guide** — [`docs/build-a-project.md`](docs/build-a-project.md) — build a real project without reading the core
 
-- pnpm monorepo: [`packages/core`](packages/core) (`@kreiz/core`, the
-  engine), [`apps/demo`](apps/demo) (reference consumer — public API
-  only, no hacks) and [`apps/website`](apps/website) (the official
-  showcase — a static, dependency-light Astro site deployed on
-  GitHub Pages; it does not use the Core at runtime)
-- The core ships an Astro integration: `kreiz()` injects the whole
-  back-office (`/admin/*`, SSR, session-guarded, CSRF) and the only public
-  endpoints (`/api/forms/[key]`, `/api/analytics/event`, prerendered
-  beacon/sitemap/robots)
-- Layered core: pure domain → services → ports (`ObjectStorage`,
-  `ImageTransformer`, `BackgroundJobs`, `Mailer`, `RebuildTrigger`) →
-  reference adapters (S3-compatible with in-house SigV4, Sharp, Vercel
-  `waitUntil`, webhook mailer, deploy hook) → Drizzle/Neon data layer
-- Content types, contact forms and SEO are **declared in code** by the
-  Project; forms and admin UI are generated — validated server-side,
-  rendered progressively (no required JavaScript)
-- Full documentation: [`docs/architecture.md`](docs/architecture.md) — in
-  particular the Save / Publish / Snapshot / Build model
+## Build with AI
 
-## Capabilities
+Kreiz is code-first: content types, forms, SEO and templates all live in
+files, so an AI assistant or agent with access to the project can do real
+work in the Project — frontend, pages, content types, forms, customization,
+integration. The Core stays stable and untouched.
 
-- **Admin**: email + Argon2id (OWASP), server-side revocable sessions
-  (14-day sliding / 90-day absolute), login rate limiting, session-bound
-  CSRF, append-only audit log, `kreiz` CLI for first admin and password
-  resets
-- **Content & publication**: generated CRUD, server-enforced route
-  namespaces, slug handling, draft management, soft delete, SSR preview
-  with the project's real templates; publishing freezes a public snapshot
-  and requests a rebuild; published slug changes create automatic 301
-  redirects (chain normalization, loop prevention) materialized at build
-  time
-- **Media**: direct presigned browser uploads to any S3-compatible
-  storage (R2/MinIO/S3), server-side verification of the real object,
-  async responsive variants (400–2000 px, WebP + AVIF, no upscaling,
-  EXIF stripped), explicit lifecycle with retry/recovery, content covers
-  with their own snapshot
-- **Rich text**: canonical versioned JSON document, Tiptap admin editor
-  behind a strict boundary, deterministic public renderer (never stored
-  HTML), hostile-paste normalization
-- **Forms**: progressive HTML (works without JavaScript), HMAC issuance
-  token, honeypot, minimum fill time, PostgreSQL rate limiting,
-  server-computed idempotency, persistence **before** notification,
-  retry with backoff + admin re-send + recovery sweep
-- **Analytics**: static ~2 KB beacon, no cookies, DNT/GPC respected, no
-  IP stored, referrer reduced to domain, form conversions without form
-  data, SQL dashboard, configurable retention (default 90 days)
-- **SEO**: code-declared canonical base (never a `Host` header), resolved
-  head (title/description/canonical/Open Graph/Twitter), typed JSON-LD,
+The public documentation ships a master prompt to copy into your assistant,
+what the AI can do, what it must avoid, and example requests:
+<https://cyril-belin.github.io/kreiz/docs/ai/>
+
+## Core vs Project
+
+| Owned by the Project | Owned by the Core |
+|---|---|
+| content types, forms, SEO/analytics config | admin UI, APIs, guards, CSRF, audit |
+| templates and public pages | publication snapshots, redirects engine |
+| schema composition + migrations | repositories, services, ports/adapters |
+| branding, wording, layout | rich text format + renderer, media pipeline |
+
+The package boundary is mechanical: the `exports` map is the only public
+surface (deep imports fail typecheck). See [`docs/api.md`](docs/api.md).
+
+## Main capabilities
+
+- **Admin** — email + Argon2id, revocable server-side sessions, login rate
+  limiting, session-bound CSRF, append-only audit log, `kreiz` CLI
+- **Content & publication** — generated CRUD, draft/publish with frozen
+  public snapshots, SSR preview with the project's real templates, automatic
+  301 redirects on published slug changes
+- **Media** — direct presigned uploads to any S3-compatible storage,
+  server-side verification, async responsive variants (WebP + AVIF,
+  EXIF stripped), explicit lifecycle with retry/recovery
+- **Rich text** — versioned JSON document, Tiptap admin editor behind a
+  strict boundary, deterministic public renderer (never stored HTML)
+- **Forms** — progressive HTML (works without JavaScript), layered
+  anti-spam, idempotency, persistence before notification, retry and
+  admin re-send
+- **Analytics** — ~2 KB beacon, no cookies, no IP stored, DNT/GPC
+  respected, SQL dashboard, configurable retention
+- **SEO** — code-declared canonical base, resolved head, typed JSON-LD,
   prerendered `sitemap.xml` and `robots.txt`, editorial `noindex`
 
-## Quick start
+## Developer quick start
+
+Requires Node 24 LTS and pnpm.
 
 ```sh
 pnpm install
@@ -97,89 +93,70 @@ pnpm --filter @kreiz/demo dev    # http://127.0.0.1:4321 — admin at /admin
 ```
 
 The showcase website runs without any database or secret:
+`pnpm --filter @kreiz/website dev` (http://localhost:4322).
 
-```sh
-pnpm --filter @kreiz/website dev     # http://localhost:4322/ — landing at the root
-pnpm --filter @kreiz/website build   # static output in apps/website/dist (base /kreiz)
-```
+Verification commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+(unit + integration on real PostgreSQL), `pnpm test:e2e` (Playwright,
+per-slice critical paths plus the global end-to-end journey).
 
-Building your own project from scratch: [`docs/build-a-project.md`](docs/build-a-project.md).
-Configuration reference (every `KREIZ_*` variable, defaults, dev vs prod):
+Every `KREIZ_*` variable, with defaults and dev-vs-prod differences:
 [`docs/configuration.md`](docs/configuration.md).
 
-## Commands
+## Architecture & advanced documentation
 
-```sh
-pnpm build          # build core, then demo and website
-pnpm typecheck      # tsc (core) + astro check (demo, website)
-pnpm lint           # eslint
-pnpm test           # vitest unit (integration skips without a database)
-pnpm test:integration  # against $KREIZ_DATABASE_URL or $KREIZ_TEST_DATABASE_URL
-pnpm test:e2e       # Playwright: per-slice critical paths + the global
-                    # end-to-end journey (core-happy-path.spec.ts) and the
-                    # recovery journey (core-recovery.spec.ts)
-```
+- pnpm monorepo: [`packages/core`](packages/core) (`@kreiz/core`, the engine),
+  [`apps/demo`](apps/demo) (reference consumer — public API only, no hacks) and
+  [`apps/website`](apps/website) (the official showcase — static, deployed on
+  GitHub Pages; it does not use the Core at runtime)
+- `kreiz()`, the Astro integration, injects the whole back-office
+  (`/admin/*`, SSR, session-guarded, CSRF) and the only public endpoints
+  (forms, analytics, maintenance cron, prerendered beacon/sitemap/robots)
+- Layered core: domain → services → ports (`ObjectStorage`, `ImageTransformer`,
+  `Mailer`, `RebuildTrigger`) → reference adapters (S3-compatible, Sharp,
+  webhook mailer, deploy hook) → Drizzle/Neon data layer —
+  see [`docs/architecture.md`](docs/architecture.md)
+- Static-first on Vercel: the public site is prerendered, one serverless
+  function serves `/admin/*`, publishing triggers a deploy-hook rebuild
+  ([`docs/operations.md`](docs/operations.md))
 
-## Project vs Core
+### Public documentation
 
-| Owned by the Project | Owned by the Core |
-|---|---|
-| content types, forms, SEO/analytics config | admin UI, APIs, guards, CSRF, audit |
-| templates and public pages | publication snapshots, redirects engine |
-| schema composition + migrations | repositories, services, ports/adapters |
-| branding, wording, layout | rich text format + renderer, media pipeline |
+For starting, understanding Kreiz, building with an AI, customizing and
+deploying — in French, versioned with the code:
+<https://cyril-belin.github.io/kreiz/docs/>
 
-The package boundary is mechanical: the `exports` map is the only public
-surface (deep imports fail typecheck). See [`docs/api.md`](docs/api.md).
+### Developer reference
 
-## Build & deploy
-
-Astro `output: 'static'` + Vercel: the public site is prerendered (pages,
-sitemap, robots, beacon); a single serverless function serves `/admin/*`
-and the public collection endpoints. Publishing triggers a deploy-hook
-rebuild; the Vercel output is verified in tests. Details:
-[`docs/operations.md`](docs/operations.md) (recovery, retention, cron
-expectations) and [`docs/production-readiness.md`](docs/production-readiness.md).
-
-The showcase website deploys independently on GitHub Pages (static only,
-no server, no secrets): see [`docs/website.md`](docs/website.md).
-
-## Documentation
-
-- [`docs/architecture.md`](docs/architecture.md) — layers, integration,
-  the Save/Publish/Snapshot/Build model
+- [`docs/architecture.md`](docs/architecture.md) — layers, integration, the Save/Publish/Snapshot/Build model
 - [`docs/api.md`](docs/api.md) — public API surface, subpath by subpath
-- [`docs/configuration.md`](docs/configuration.md) — project config and
-  environment variables reference
-- [`docs/build-a-project.md`](docs/build-a-project.md) — build a real
-  project without reading the core
-- [`docs/website.md`](docs/website.md) — the showcase website: build,
-  GitHub Pages, base path, custom domain
-- [`docs/operations.md`](docs/operations.md) — runbooks, recovery table,
-  external cron needs
-- [`docs/privacy-data-map.md`](docs/privacy-data-map.md) — per-table data
-  map for privacy review
-- [`docs/technical-debt.md`](docs/technical-debt.md) — honest debt register
-- [`docs/production-readiness.md`](docs/production-readiness.md) —
-  ready / conditional / not yet
-- [`docs/handoff.md`](docs/handoff.md) — developer handoff, performance
-  baseline, next step
-- [`docs/cadrage.md`](docs/cadrage.md) — original vision and decision
-  record · [`docs/slices/`](docs/slices) — per-slice verification logs
+- [`docs/configuration.md`](docs/configuration.md) — project config and environment variables reference
+- [`docs/build-a-project.md`](docs/build-a-project.md) — build a real project from the template
+- [`docs/operations.md`](docs/operations.md) — runbooks, recovery table, cron expectations
+- [`docs/production-readiness.md`](docs/production-readiness.md) — ready / conditional / not yet
+- [`docs/security-review-final.md`](docs/security-review-final.md) — adversarial review: findings, fixes, remaining conditions
+- [`docs/technical-debt.md`](docs/technical-debt.md) — honest debt register · [`docs/privacy-data-map.md`](docs/privacy-data-map.md) — per-table data map
+- [`docs/handoff.md`](docs/handoff.md) — developer handoff and performance baseline · [`docs/website.md`](docs/website.md) — the showcase site
+- [`docs/cadrage.md`](docs/cadrage.md) — original vision and decision record · [`docs/slices/`](docs/slices) — per-slice verification logs
 
-## Status
+## Production status
 
-**Pre-release — closing pass complete, CONDITIONALLY READY.** Ten
-development slices plus a security interlude are complete and verified
-(unit, integration on real PostgreSQL/Neon, E2E including a global
-end-to-end journey). The final adversarial security review has been
-performed (GLM), followed by an independent senior review (Claude) —
-neither found a new critical or high vulnerability; the findings that were
-confirmed have been fixed in the working tree. Remaining production
-conditions (contact-requests retention policy, external cron for
-recoveries, Vercel-only IP trust, storage-derived CSP) are listed in
-[`docs/security-review-final.md`](docs/security-review-final.md) and
-[`docs/production-readiness.md`](docs/production-readiness.md).
+**Pre-release — conditionally ready.** Core V1 is closed and verified:
+756 unit and integration tests (integration on real PostgreSQL), 84 E2E
+tests including a global end-to-end journey. A final adversarial security
+review and an independent senior review found no critical or high
+vulnerability left open; the fixes are merged into `main`.
+
+Before running a real production site, review the remaining conditions:
+
+- define the contact-requests retention policy (opt-in via
+  `KREIZ_CONTACT_RETENTION_DAYS`)
+- declare the external cron that calls the maintenance endpoint
+  (`POST /api/maintenance`)
+- deploy on Vercel (the IP-header trust model is Vercel-specific)
+- derive the Project CSP from its storage configuration
+
+Details: [`docs/production-readiness.md`](docs/production-readiness.md) and
+[`docs/security-review-final.md`](docs/security-review-final.md).
 
 Baseline: Node 24 LTS · Astro 7 · Tailwind 4 · Neon PostgreSQL + Drizzle ·
 Vercel. Exact versions are locked in `pnpm-lock.yaml`.
@@ -187,3 +164,7 @@ Vercel. Exact versions are locked in `pnpm-lock.yaml`.
 ## License
 
 Licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+
+The repository is public, open source and configured as a GitHub Template:
+use [**Use this template**](https://github.com/cyril-belin/kreiz/generate)
+to start your own site.
