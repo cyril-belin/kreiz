@@ -1,24 +1,54 @@
 # Construire un Project Kreiz
 
-> Guide du développeur (slice 10) : créer un vrai site avec Kreiz sans
-> lire le code du Core. `apps/demo` est une référence complète et
-> consommée exclusivement par l'API publique — aucun hack.
+> Guide du développeur (slice 10) : créer un vrai site avec Kreiz sans lire le
+> code du Core. Kreiz est un **starter** : un nouveau projet part d'une copie
+> de ce repository (template GitHub), pas d'un paquet à installer sur npm.
+> `apps/demo` est une référence complète et consommée exclusivement par
+> l'API publique — aucun hack.
 
-## 1. Installation
+## 1. Partir du template
+
+Sur GitHub, depuis `cyril-belin/kreiz` : **Use this template** → votre repo
+(ex. `mon-site`), puis :
 
 ```sh
-pnpm add @kreiz/core astro @astrojs/vercel   # Node 24 LTS, Astro 7
-pnpm add -D drizzle-kit
+git clone git@github.com:vous/mon-site.git
+cd mon-site
+pnpm install                       # Node 24 LTS
+pnpm build                         # core (dist/) puis démo
 ```
 
 Prérequis : un PostgreSQL (Neon recommandé), optionnellement un stockage
 S3-compatible (R2/MinIO) pour les médias et un relais email pour les
 notifications de contact.
 
+Votre site vit comme `apps/<votre-app>`. Le plus court chemin est de partir
+de la démo — une app complète et fonctionnelle — et de l'adapter :
+
+```sh
+cp -R apps/demo apps/mon-site
+rm -rf apps/mon-site/node_modules apps/mon-site/dist apps/mon-site/.astro apps/mon-site/.vercel apps/mon-site/test-results
+pnpm install
+```
+
+Puis trois ajustements :
+
+- **Nom du paquet** : `"name": "@kreiz/demo"` → le vôtre dans
+  `apps/mon-site/package.json`.
+- **Scripts root** : `db:generate`, `db:migrate` et `test:e2e` ciblent
+  `@kreiz/demo` — dupliquez-les pour votre app
+  (ex. `pnpm --filter @kreiz/mon-site db:migrate`).
+- **Gardez `apps/demo`** comme référence de travail tant que vous en avez
+  besoin ; supprimez-la quand vous voulez (ajustez alors les filtres
+  `@kreiz/demo` du workflow CI, qui pilote aussi l'E2E de la démo).
+
+L'environnement de votre app : copier `apps/mon-site/.env.example` en
+`.env` (ignoré par git) avec votre branche Neon et votre secret.
+
 ## 2. Schéma et migrations
 
 Le schéma appartient à **votre app** — le Core ne possède aucune
-migration :
+migration. La copie de la démo apporte déjà la composition de référence :
 
 ```ts
 // src/schema.ts
@@ -39,8 +69,8 @@ export default defineConfig({
 ```
 
 ```sh
-pnpm drizzle-kit generate    # chaîne de migrations (la vôtre)
-pnpm drizzle-kit migrate     # application
+pnpm --filter @kreiz/mon-site db:generate   # votre chaîne de migrations
+pnpm --filter @kreiz/mon-site db:migrate    # application sur votre base
 ```
 
 ## 3. Configuration
@@ -192,8 +222,7 @@ page publique reste sans JavaScript obligatoire.
 ## 9. Premier admin et exploitation
 
 ```sh
-pnpm --filter @kreiz/core build
-pnpm --filter @kreiz/core exec kreiz admin:create --email vous@site.fr --name Vous
+pnpm --filter @kreiz/mon-site exec kreiz admin:create --email vous@site.fr --name Vous
 ```
 
 Déploiement Vercel : variables de production (voir
@@ -204,8 +233,11 @@ Déploiement Vercel : variables de production (voir
 
 ## 10. Checklist du Project
 
-- [ ] schéma composé + chaîne de migrations possédée par l'app
-- [ ] `KREIZ_DATABASE_URL` + `KREIZ_SECRET` (build et runtime)
+- [ ] site créé depuis le template GitHub (repo dédié)
+- [ ] app `apps/<votre-app>` partie de la démo, paquet renommé
+- [ ] scripts root (`db:*`, `test:e2e`) et filtres CI ajustés à votre app
+- [ ] `KREIZ_DATABASE_URL` (branche dédiée) + `KREIZ_SECRET` (build et runtime)
+- [ ] chaîne de migrations appliquée sur votre base
 - [ ] types de contenu + templates partagés public/preview
 - [ ] pages `getStaticPaths` lisant `createContentReader`
 - [ ] SEO : base canonique déclarée, head résolue, JSON-LD
