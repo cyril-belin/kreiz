@@ -109,6 +109,32 @@ jobs:
           pnpm --filter @kreiz/core build
           pnpm --filter @kreiz/demo db:migrate
 
+      # La branche éphémère hérite des DONNÉES de la branche source (fork
+      # Neon) : des vues analytics réelles accumulées sur la démo faussent
+      # les agrégations globales des tests (constaté 2026-09-28 : 17 vues
+      # sur '/' ont fait échouer topPages). La purge rend la CI hermétique
+      # quel que soit l'état de la branche d'origine.
+      - name: Purger les données héritées (tests hermétiques)
+        if: steps.neon-branch.outputs.url != ''
+        env:
+          KREIZ_DATABASE_URL: ${{ steps.neon-branch.outputs.url }}
+        run: |
+          pnpm --filter @kreiz/demo exec node --input-type=module -e '
+          import { Client } from "pg";
+          const client = new Client({ connectionString: process.env.KREIZ_DATABASE_URL });
+          await client.connect();
+          const tables = await client.query(
+            "select tablename from pg_tables where schemaname = $1 and tablename like $2",
+            ["public", "kreiz_%"],
+          );
+          if (tables.rows.length > 0) {
+            const list = tables.rows.map((row) => `"${row.tablename}"`).join(", ");
+            await client.query(`truncate table ${list} cascade`);
+          }
+          console.log("Tables kreiz_* purgées sur la branche éphémère :", tables.rows.map((row) => row.tablename).join(", "));
+          await client.end();
+          '
+
       - name: Tests d'intégration Neon
         if: steps.neon-branch.outputs.url != ''
         env:
