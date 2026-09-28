@@ -140,23 +140,25 @@ deploying — in French, versioned with the code:
 
 ## Production status
 
-**Pre-release — conditionally ready.** Core V1 is closed and verified:
-756 unit and integration tests (integration on real PostgreSQL), 84 E2E
-tests including a global end-to-end journey. A final adversarial security
-review and an independent senior review found no critical or high
-vulnerability left open; the fixes are merged into `main`.
+**Pre-release — conditionally ready.**
 
-Before running a real production site, review the remaining conditions:
+Core V1 is closed and verified with:
 
-- define the contact-requests retention policy (opt-in via
-  `KREIZ_CONTACT_RETENTION_DAYS`)
-- declare the external cron that calls the maintenance endpoint
-  (`POST /api/maintenance`)
-- deploy on Vercel (the IP-header trust model is Vercel-specific)
-- derive the Project CSP from its storage configuration
+- 756 unit and integration tests
+- 84 end-to-end tests
+- real PostgreSQL integration coverage
+- adversarial security review
+- independent senior review
 
-Details: [`docs/production-readiness.md`](docs/production-readiness.md) and
-[`docs/security-review-final.md`](docs/security-review-final.md).
+No critical or high vulnerability is currently known to remain open.
+
+Before production deployment, review the required operational configuration
+for retention, maintenance jobs, storage/CSP and hosting assumptions.
+
+See:
+
+- [`docs/production-readiness.md`](docs/production-readiness.md)
+- [`docs/security-review-final.md`](docs/security-review-final.md)
 
 Baseline: Node 24 LTS · Astro 7 · Tailwind 4 · Neon PostgreSQL + Drizzle ·
 Vercel. Exact versions are locked in `pnpm-lock.yaml`.
