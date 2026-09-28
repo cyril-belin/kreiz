@@ -1,6 +1,13 @@
 # Kreiz
 
-> Open-source editorial core for Astro
+[![CI](https://github.com/cyril-belin/kreiz/actions/workflows/ci.yml/badge.svg)](https://github.com/cyril-belin/kreiz/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+> An Astro editorial core to publish without a page builder.
+
+**Official website: https://cyril-belin.github.io/kreiz/**
+
+![Kreiz — Publiez sans page builder](docs/assets/landing-hero.jpg)
 
 Kreiz is a reusable editorial core for building professional, admin-managed, editorial
 and semi-static sites with Astro — without a page builder. It provides the editorial
@@ -28,8 +35,10 @@ The database is the source of truth; the static output is a projection.
 ## Architecture in one minute
 
 - pnpm monorepo: [`packages/core`](packages/core) (`@kreiz/core`, the
-  engine) and [`apps/demo`](apps/demo) (reference consumer — public API
-  only, no hacks)
+  engine), [`apps/demo`](apps/demo) (reference consumer — public API
+  only, no hacks) and [`apps/website`](apps/website) (the official
+  showcase — a static, dependency-light Astro site deployed on
+  GitHub Pages; it does not use the Core at runtime)
 - The core ships an Astro integration: `kreiz()` injects the whole
   back-office (`/admin/*`, SSR, session-guarded, CSRF) and the only public
   endpoints (`/api/forms/[key]`, `/api/analytics/event`, prerendered
@@ -87,6 +96,13 @@ pnpm --filter @kreiz/core exec kreiz admin:create   # first admin (interactive)
 pnpm --filter @kreiz/demo dev    # http://127.0.0.1:4321 — admin at /admin
 ```
 
+The showcase website runs without any database or secret:
+
+```sh
+pnpm --filter @kreiz/website dev     # http://localhost:4322/ — landing at the root
+pnpm --filter @kreiz/website build   # static output in apps/website/dist (base /kreiz)
+```
+
 Building your own project from scratch: [`docs/build-a-project.md`](docs/build-a-project.md).
 Configuration reference (every `KREIZ_*` variable, defaults, dev vs prod):
 [`docs/configuration.md`](docs/configuration.md).
@@ -94,8 +110,8 @@ Configuration reference (every `KREIZ_*` variable, defaults, dev vs prod):
 ## Commands
 
 ```sh
-pnpm build          # build core, then demo
-pnpm typecheck      # tsc (core) + astro check (demo)
+pnpm build          # build core, then demo and website
+pnpm typecheck      # tsc (core) + astro check (demo, website)
 pnpm lint           # eslint
 pnpm test           # vitest unit (integration skips without a database)
 pnpm test:integration  # against $KREIZ_DATABASE_URL or $KREIZ_TEST_DATABASE_URL
@@ -125,6 +141,9 @@ rebuild; the Vercel output is verified in tests. Details:
 [`docs/operations.md`](docs/operations.md) (recovery, retention, cron
 expectations) and [`docs/production-readiness.md`](docs/production-readiness.md).
 
+The showcase website deploys independently on GitHub Pages (static only,
+no server, no secrets): see [`docs/website.md`](docs/website.md).
+
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — layers, integration,
@@ -134,6 +153,8 @@ expectations) and [`docs/production-readiness.md`](docs/production-readiness.md)
   environment variables reference
 - [`docs/build-a-project.md`](docs/build-a-project.md) — build a real
   project without reading the core
+- [`docs/website.md`](docs/website.md) — the showcase website: build,
+  GitHub Pages, base path, custom domain
 - [`docs/operations.md`](docs/operations.md) — runbooks, recovery table,
   external cron needs
 - [`docs/privacy-data-map.md`](docs/privacy-data-map.md) — per-table data

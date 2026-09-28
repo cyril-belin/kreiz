@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@import "@fontsource-variable/fraunces/wght.css";
+@import "@fontsource-variable/fraunces/wght-italic.css";
+
+/*
+ * Identité « papier éditorial » de la vitrine Kreiz : papier chaud, encre
+ * profonde, accent rouille unique. Tokens Tailwind 4 — tout le styling passe
+ * par des classes utilitaires (aucun style inline).
+ */
+@theme {
+  --font-display: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --color-paper: #faf7f1;
+  --color-ink: #1c1917;
+  --color-rust: #b0522d;
+}
+
+/* Focus visible cohérent avec l'identité (navigation clavier). */
+a:focus-visible {
+  outline: 2px solid var(--color-rust);
+  outline-offset: 3px;
+}

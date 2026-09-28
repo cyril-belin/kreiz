@@ -1,0 +1,64 @@
+name: Pages — vitrine Kreiz
+
+# Déploiement de la vitrine statique (apps/website) sur GitHub Pages.
+# Le build ne nécessite AUCUN secret : ni base de données, ni KREIZ_*,
+# ni accès Neon — la vitrine ne dépend pas du Core au runtime.
+# Prérequis repo (une fois, manuel) : Settings → Pages → Source = GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/website/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Permissions minimales : lecture du code, écriture Pages uniquement.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul déploiement Pages à la fois ; les runs en attente ne s'annulent
+# pas entre eux (on garde le dernier état poussé, on ne saute pas de build).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Installer Node 24 (cache pnpm)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Installer les dépendances (lockfile figé)
+        run: pnpm install --frozen-lockfile
+
+      - name: Construire la vitrine (statique, base /kreiz)
+        run: pnpm --filter @kreiz/website build
+
+      - name: Publier l'artifact Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Déployer sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

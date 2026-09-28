@@ -1,0 +1,356 @@
+---
+import { Image } from 'astro:assets';
+import '../styles/global.css';
+import adminDashboard from '../assets/admin-dashboard.png';
+
+/**
+ * Vitrine officielle Kreiz — site 100 % statique (GitHub Pages), sans base de
+ * données, sans endpoint, sans dépendance runtime au Core : la page ne
+ * construit que du HTML. Direction « papier éditorial » : papier chaud, serif
+ * Fraunces, accent rouille, capture réelle du back-office.
+ *
+ * Toutes les URLs canoniques/OG sont dérivées d'astro.config.ts (site + base) :
+ * un domaine custom se configure là-bas, jamais ici.
+ */
+const TITLE = 'Kreiz — Le noyau éditorial Astro, sans page builder';
+const DESCRIPTION =
+  "Kreiz est un starter open-source pour Astro : back-office privé, types de contenu déclarés en code, médias, formulaires, analytics et SEO — compilés en un site public 100 % statique.";
+// import.meta.env.BASE_URL porte le `base` d'astro.config ('/kreiz' en build,
+// '/kreiz/' en dev) : normaliser en préfixe sans slash final.
+const basePath = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+const siteUrl = Astro.site ? new URL(`${basePath}/`, Astro.site).href : `${basePath}/`;
+const ogImageUrl = new URL('og.png', siteUrl).href;
+
+const REPO_URL = 'https://github.com/cyril-belin/kreiz';
+const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+const DOCS_URL = 'https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md';
+const LICENSE_URL = 'https://github.com/cyril-belin/kreiz/blob/main/LICENSE';
+
+const websiteLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Kreiz',
+  url: siteUrl,
+  description: DESCRIPTION,
+};
+
+const notKreiz = [
+  'un page builder',
+  'un CMS hébergé',
+  'un outil de workflow multi-rôles',
+  'une plateforme e-commerce ou newsletter',
+  'une marketplace de plugins ou de thèmes',
+];
+const isKreiz = [
+  'un noyau éditorial complet, sans dépendance hébergée',
+  'un admin privé : sessions, CSRF, journal d’audit append-only',
+  'des snapshots publics figés à chaque publication',
+  'un site public compilé, 100 % statique',
+];
+const features = [
+  {
+    n: '01',
+    title: 'Back-office privé',
+    text: 'Admin complet injecté par le Core : sessions signées, CSRF, journal d’audit append-only, CLI pour le premier administrateur.',
+  },
+  {
+    n: '02',
+    title: 'Types de contenu en code',
+    text: 'Déclarez les champs et le template ; les formulaires admin, la validation serveur et la preview sont générés.',
+  },
+  {
+    n: '03',
+    title: 'Save ≠ Publish',
+    text: 'Le site public ne lit que des snapshots figés. Enregistrer n’est pas publier : publier déclenche la reconstruction.',
+  },
+  {
+    n: '04',
+    title: 'Médias',
+    text: 'Upload direct signé vers S3, R2 ou MinIO, vérification serveur, variantes responsive servies par votre CDN.',
+  },
+  {
+    n: '05',
+    title: 'Rich text',
+    text: 'Éditeur Tiptap sur un document canonique versionné ; le HTML public est rendu par le Core, jamais stocké.',
+  },
+  {
+    n: '06',
+    title: 'Formulaires de contact',
+    text: 'Anti-spam en couches (jeton signé, honeypot, rythme), idempotence des soumissions, relais email optionnel.',
+  },
+  {
+    n: '07',
+    title: 'Analytics privacy-first',
+    text: 'Beacon statique sans cookie, IP pseudonymisée, dashboard SQL dans l’admin, rétention bornée.',
+  },
+  {
+    n: '08',
+    title: 'SEO',
+    text: 'Head résolue par le Core : canonical, Open Graph, sitemap, robots et JSON-LD générés au build.',
+  },
+];
+const codeSample = `export const articleType = defineContentType({
+  key: 'article',
+  label: 'Article',
+  routeNamespace: 'articles',          // → /articles/<slug>
+  fields: {
+    excerpt: fields.text({ label: 'Accroche', required: true, maxLength: 300 }),
+    body: fields.richText({ label: 'Corps', required: true }),
+  },
+  template: 'src/templates/ArticleContent.astro',
+});`;
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{TITLE}</title>
+    <meta name="description" content={DESCRIPTION} />
+    <link rel="canonical" href={siteUrl} />
+    <link rel="icon" type="image/svg+xml" href={`${basePath}/favicon.svg`} />
+    <meta name="theme-color" content="#faf7f1" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={siteUrl} />
+    <meta property="og:title" content={TITLE} />
+    <meta property="og:description" content={DESCRIPTION} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={TITLE} />
+    <meta name="twitter:description" content={DESCRIPTION} />
+    <meta name="twitter:image" content={ogImageUrl} />
+    <script type="application/ld+json" set:html={JSON.stringify(websiteLd)} />
+  </head>
+  <body class="min-h-screen bg-paper font-sans text-ink antialiased">
+    <header class="border-b border-stone-300/60">
+      <nav class="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-x-8 gap-y-3 px-6 py-5">
+        <a href={`${basePath}/`} class="font-display text-2xl font-semibold tracking-tight">Kreiz</a>
+        <div class="flex items-center gap-x-6 gap-y-2 text-sm text-stone-600">
+          <a href="#fonctionnalites" class="hidden transition-colors hover:text-ink md:inline">Fonctionnalités</a>
+          <a href="#philosophie" class="hidden transition-colors hover:text-ink md:inline">Philosophie</a>
+          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
+          <a
+            href={TEMPLATE_URL}
+            class="hidden rounded-full border border-stone-400 px-4 py-2 font-medium transition-colors hover:border-ink hover:text-ink sm:inline-block"
+          >Utiliser le template</a>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <section class="overflow-hidden">
+        <div class="mx-auto max-w-6xl px-6 pb-12 pt-16 text-center md:pt-24">
+          <p class="flex items-center justify-center gap-3" aria-hidden="true">
+            <span class="h-px w-10 bg-rust/50"></span>
+            <span class="text-rust">✳</span>
+            <span class="h-px w-10 bg-rust/50"></span>
+          </p>
+          <p class="mt-5 text-xs font-medium uppercase tracking-[0.25em] text-stone-500">
+            Starter open-source&nbsp;· Apache-2.0
+          </p>
+          <h1 class="mx-auto mt-6 max-w-3xl font-display text-5xl font-medium leading-[1.05] tracking-tight md:text-7xl">
+            Publiez sans <em class="italic text-rust">page&nbsp;builder</em>.
+          </h1>
+          <p class="mx-auto mt-7 max-w-2xl text-lg leading-relaxed text-stone-600">
+            Kreiz est le noyau éditorial d’Astro&nbsp;: back-office privé, types de
+            contenu déclarés en code, médias, formulaires, analytics et SEO —
+            compilés en un site public entièrement statique. Vous gardez la
+            présentation, le schéma et les migrations.
+          </p>
+          <div class="mt-9 flex flex-wrap items-center justify-center gap-4">
+            <a
+              href={TEMPLATE_URL}
+              class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-ink"
+            >Utiliser le template&nbsp;→</a>
+            <a
+              href={DOCS_URL}
+              class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
+            >Lire la documentation</a>
+          </div>
+        </div>
+
+        <div class="mx-auto max-w-5xl px-6 pb-20 md:pb-24">
+          <div class="rounded-2xl border border-stone-300/70 bg-white shadow-[0_30px_70px_-30px_rgba(28,25,23,0.35)]">
+            <div class="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+              <span class="size-3 rounded-full bg-stone-200"></span>
+              <span class="size-3 rounded-full bg-stone-200"></span>
+              <span class="size-3 rounded-full bg-stone-200"></span>
+              <span class="mx-auto rounded-md bg-stone-100 px-4 py-1 text-xs text-stone-500">demo.kreiz.dev/admin</span>
+            </div>
+            <Image
+              src={adminDashboard}
+              alt="Le back-office Kreiz : dashboard, contenus, médiathèque, formulaires et analytics."
+              widths={[640, 1024, 1600]}
+              sizes="(max-width: 1024px) 100vw, 1024px"
+              class="rounded-b-2xl"
+              loading="eager"
+              fetchpriority="high"
+            />
+          </div>
+        </div>
+
+        <div class="border-y border-stone-300/60 bg-white/60">
+          <p class="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-6 py-4 text-xs font-medium uppercase tracking-[0.2em] text-stone-500">
+            <span>Apache-2.0</span>
+            <span aria-hidden="true">·</span>
+            <span>Astro 7</span>
+            <span aria-hidden="true">·</span>
+            <span>Node 24</span>
+            <span aria-hidden="true">·</span>
+            <span>pnpm</span>
+            <span aria-hidden="true">·</span>
+            <span>Vercel-ready</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="mx-auto max-w-6xl px-6 py-20 md:py-28">
+        <h2 class="font-display text-3xl font-medium tracking-tight md:text-4xl">
+          Honnête par construction
+        </h2>
+        <p class="mt-4 max-w-2xl leading-relaxed text-stone-600">
+          Kreiz fait une chose, et la fait entièrement&nbsp;: le moteur éditorial.
+          Chaque projet garde sa marque, ses types, ses templates et ses mots.
+        </p>
+        <div class="mt-10 grid gap-6 md:grid-cols-2">
+          <div class="rounded-2xl border border-stone-300/70 bg-white p-8">
+            <h3 class="text-sm font-semibold uppercase tracking-widest text-stone-400">
+              Ce que Kreiz n’est pas
+            </h3>
+            <ul class="mt-6 space-y-3 text-stone-600">
+              {notKreiz.map((item) => (
+                <li class="flex gap-3">
+                  <span aria-hidden="true" class="text-stone-400">✗</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-rust/40 bg-rust/5 p-8">
+            <h3 class="text-sm font-semibold uppercase tracking-widest text-rust">
+              Ce que Kreiz est
+            </h3>
+            <ul class="mt-6 space-y-3 text-stone-700">
+              {isKreiz.map((item) => (
+                <li class="flex gap-3">
+                  <span aria-hidden="true" class="font-medium text-rust">✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="fonctionnalites" class="border-t border-stone-300/60">
+        <div class="mx-auto max-w-6xl px-6 py-20 md:py-28">
+          <h2 class="font-display text-3xl font-medium tracking-tight md:text-4xl">
+            Tout est inclus
+          </h2>
+          <p class="mt-4 max-w-2xl leading-relaxed text-stone-600">
+            Pas de marketplace, pas de plugins à assembler&nbsp;: le noyau couvre
+            le cycle éditorial de bout en bout.
+          </p>
+          <ol class="mt-12 grid gap-x-14 gap-y-10 md:grid-cols-2">
+            {features.map((feature) => (
+              <li class="flex gap-6">
+                <span class="font-display text-2xl font-medium text-rust">{feature.n}</span>
+                <div>
+                  <h3 class="font-medium">{feature.title}</h3>
+                  <p class="mt-2 text-sm leading-relaxed text-stone-600">{feature.text}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section id="philosophie" class="border-t border-stone-300/60 bg-white/60">
+        <div class="mx-auto max-w-6xl px-6 py-20 md:py-28">
+          <p class="text-xs font-medium uppercase tracking-[0.25em] text-stone-500">Philosophie</p>
+          <h2 class="mt-4 font-display text-4xl font-medium tracking-tight md:text-5xl">
+            Save <span class="text-rust">≠</span> Publish
+          </h2>
+          <div class="mt-12 grid gap-8 md:grid-cols-3">
+            <div class="border-t-2 border-stone-300 pt-6">
+              <p class="font-display text-xl font-medium">Enregistrez</p>
+              <p class="mt-2 text-sm leading-relaxed text-stone-600">
+                Les brouillons vivent en base, dans l’admin. Rien n’est public,
+                rien ne se perd.
+              </p>
+            </div>
+            <div class="border-t-2 border-stone-300 pt-6">
+              <p class="font-display text-xl font-medium">Publiez</p>
+              <p class="mt-2 text-sm leading-relaxed text-stone-600">
+                La publication fige un snapshot immuable — la version servie ne
+                peut plus bouger sous vos pieds.
+              </p>
+            </div>
+            <div class="border-t-2 border-rust pt-6">
+              <p class="font-display text-xl font-medium text-rust">Reconstruisez</p>
+              <p class="mt-2 text-sm leading-relaxed text-stone-600">
+                Le rebuild est déclenché par deploy hook. Un rebuild raté
+                n’abîme jamais le site servi.
+              </p>
+            </div>
+          </div>
+          <blockquote class="mt-14 max-w-2xl border-l-2 border-rust pl-6 font-display text-2xl font-medium italic leading-snug text-stone-800">
+            «&nbsp;La base est la source de vérité&nbsp;; le site statique n’en
+            est que la projection.&nbsp;»
+          </blockquote>
+        </div>
+      </section>
+
+      <section class="mx-auto max-w-6xl px-6 py-20 md:py-28">
+        <h2 class="font-display text-3xl font-medium tracking-tight md:text-4xl">
+          Déclarez. Le Core génère.
+        </h2>
+        <p class="mt-4 max-w-2xl leading-relaxed text-stone-600">
+          Le formulaire admin, la validation serveur et la preview naissent de
+          cette seule déclaration.
+        </p>
+        <pre
+          class="mt-8 overflow-x-auto rounded-2xl bg-ink p-6 text-[13px] leading-relaxed text-stone-300 md:p-8"
+        ><code>{codeSample}</code></pre>
+      </section>
+
+      <section class="bg-ink text-paper">
+        <div class="mx-auto max-w-6xl px-6 py-20 text-center md:py-28">
+          <h2 class="mx-auto max-w-2xl font-display text-4xl font-medium leading-tight tracking-tight md:text-6xl">
+            Votre prochain site part d’ici.
+          </h2>
+          <p class="mx-auto mt-5 max-w-xl text-stone-400">
+            Clonez le starter, créez votre app, déployez. Le premier admin se
+            crée en une commande.
+          </p>
+          <pre
+            class="mx-auto mt-9 w-fit max-w-full overflow-x-auto rounded-xl bg-white/10 px-5 py-3 text-sm text-stone-200"
+          ><code>$ git clone https://github.com/cyril-belin/kreiz.git mon-site</code></pre>
+          <a
+            href={TEMPLATE_URL}
+            class="mt-9 inline-block rounded-full bg-paper px-6 py-3 text-sm font-medium text-ink transition-colors hover:bg-rust hover:text-white"
+          >Utiliser le template&nbsp;→</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-stone-300/60">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-6 py-10 text-sm text-stone-500">
+        <p>
+          <span class="font-display italic">Kreiz</span> — «&nbsp;centre&nbsp;» en
+          breton. Noyau éditorial pour Astro.
+        </p>
+        <p class="flex gap-6">
+          <a href={LICENSE_URL} class="transition-colors hover:text-ink">Apache-2.0</a>
+          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
+          <a href={DOCS_URL} class="transition-colors hover:text-ink">Documentation</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
