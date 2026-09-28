@@ -104,7 +104,7 @@ else if (Astro.request.method === 'POST') {
 ---
 
 <AdminShell
-  title={declaration ? `Nouveau ${declaration.label.toLowerCase()}` : 'Contenu'}
+  title={declaration ? (declaration.labels?.create ?? `Nouveau ${declaration.label.toLowerCase()}`) : 'Contenu'}
   admin={access.access.admin}
   csrfToken={access.access.csrfToken}
   currentPath={Astro.url.pathname}

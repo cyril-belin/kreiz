@@ -8,8 +8,16 @@ import { defineContentType, fields, type InferContentTypeData } from '@kreiz/cor
  */
 export const caseStudyType = defineContentType({
   key: 'case_study',
-  label: 'Case Study',
+  label: 'Réalisation',
   labelPlural: 'Réalisations',
+  // Accord de genre français non dérivable mécaniquement : les libellés UI
+  // de création/état vide sont fournis explicitement (fallback Core sinon :
+  // « Nouveau {label} », « Aucun {label} », « Créer un {label} »).
+  labels: {
+    create: 'Nouvelle réalisation',
+    empty: 'Aucune réalisation',
+    createAction: 'Créer une réalisation',
+  },
   routeNamespace: 'realisations',
   fields: {
     shortDescription: fields.text({

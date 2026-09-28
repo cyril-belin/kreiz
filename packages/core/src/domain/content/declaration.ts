@@ -63,6 +63,22 @@ export interface ContentTypeDeclaration<F extends Record<string, FieldDescriptor
   readonly label: string;
   /** Libellé pluriel pour la navigation admin (défaut : label + « s »). */
   readonly labelPlural?: string;
+  /**
+   * Libellés UI dérivés du type — optionnels car l'accord de genre français
+   * (« Nouvelle réalisation » vs « Nouveau guide ») n'est pas dérivable de
+   * manière mécanique depuis `label`. Sans ce champ, l'admin compose ses
+   * libellés par défaut (« Nouveau {label} », « Aucun {label} », « Créer un
+   * {label} ») ; avec, le Project fournit les formulations exactes et aucun
+   * nom technique ne remonte dans l'interface.
+   */
+  readonly labels?: {
+    /** Titre de la page de création et bouton d'action du listing. */
+    readonly create?: string;
+    /** Message d'état vide du listing. */
+    readonly empty?: string;
+    /** Appel à l'action du message d'état vide. */
+    readonly createAction?: string;
+  };
   /** Namespace de route public (`articles` → `/articles/[slug]`). Imposé serveur. */
   readonly routeNamespace: string;
   /** Champs spécifiques du type — vocabulaire borné, sens structuré uniquement. */
@@ -105,6 +121,7 @@ export function defineContentType<F extends Record<string, FieldDescriptor>>(
     key: definition.key,
     label: definition.label,
     labelPlural: definition.labelPlural,
+    labels: definition.labels,
     routeNamespace: definition.routeNamespace,
     fields: definition.fields,
     template: definition.template,

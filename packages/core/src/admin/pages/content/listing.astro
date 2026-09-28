@@ -52,16 +52,16 @@ const statusLabels: Record<string, string> = { draft: 'Brouillon', published: 'P
       <>
         <div class="kz-page-actions">
           <a class="kz-button" href={adminContentNewPath(declaration.key)}>
-            Nouveau {declaration.label.toLowerCase()}
+            {declaration.labels?.create ?? `Nouveau ${declaration.label.toLowerCase()}`}
           </a>
         </div>
         {entries.length === 0 ? (
           <MessagePanel
             tone="info"
-            title={`Aucun ${declaration.label.toLowerCase()}`}
+            title={declaration.labels?.empty ?? `Aucun ${declaration.label.toLowerCase()}`}
             description="Créez le premier brouillon pour ce type de contenu."
             backHref={adminContentNewPath(declaration.key)}
-            backLabel={`Créer un ${declaration.label.toLowerCase()}`}
+            backLabel={declaration.labels?.createAction ?? `Créer un ${declaration.label.toLowerCase()}`}
           />
         ) : (
           <div class="kz-table-wrapper">

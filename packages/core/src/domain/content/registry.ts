@@ -56,6 +56,12 @@ export interface ResolvedContentTypeDeclaration<
   readonly key: string;
   readonly label: string;
   readonly labelPlural: string;
+  /** Libellés UI optionnels du Project (accord de genre) — fallbacks sinon. */
+  readonly labels?: {
+    readonly create?: string;
+    readonly empty?: string;
+    readonly createAction?: string;
+  };
   readonly routeNamespace: string;
   readonly fields: F;
   readonly template: KreizTemplateComponent;
@@ -183,6 +189,7 @@ export function createContentTypeRegistry(input: ContentTypeRegistryInput): Cont
       key: declaration.key,
       label: declaration.label,
       labelPlural: contentLabelPlural(declaration),
+      labels: declaration.labels,
       routeNamespace: declaration.routeNamespace,
       fields: declaration.fields,
       template,

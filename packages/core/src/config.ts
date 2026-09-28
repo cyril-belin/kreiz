@@ -65,6 +65,15 @@ const contentTypeDeclarationSchema = z.object({
     .regex(CONTENT_TYPE_KEY_PATTERN),
   label: z.string().min(1).max(CONTENT_TYPE_LABEL_MAX_LENGTH),
   labelPlural: z.string().min(1).max(CONTENT_TYPE_LABEL_MAX_LENGTH).optional(),
+  // Libellés UI optionnels (accord de genre français) — chaque formulation
+  // bornée comme un label. Absents = fallbacks composés côté admin.
+  labels: z
+    .strictObject({
+      create: z.string().min(1).max(CONTENT_TYPE_LABEL_MAX_LENGTH).optional(),
+      empty: z.string().min(1).max(CONTENT_TYPE_LABEL_MAX_LENGTH).optional(),
+      createAction: z.string().min(1).max(CONTENT_TYPE_LABEL_MAX_LENGTH).optional(),
+    })
+    .optional(),
   routeNamespace: z
     .string()
     .min(1)
@@ -150,6 +159,13 @@ export const kreizConfigSchema = z.strictObject({
   seo: seoSiteInputSchema.optional(),
 });
 
+/** Libellés UI optionnels d'un type de contenu (accord de genre français). */
+export type ContentTypeUiLabels = {
+  create?: string;
+  empty?: string;
+  createAction?: string;
+};
+
 /**
  * Configuration normalisée — forme sérialisée vers `virtual:kreiz/config`.
  * `dataSchema` et `payloadSchema` sont retirés (dérivés côté runtime).
@@ -162,6 +178,7 @@ export type KreizConfig = {
       key: string;
       label: string;
       labelPlural?: string;
+      labels?: ContentTypeUiLabels;
       routeNamespace: string;
       fields: Record<string, FieldDescriptor>;
       template: string;
@@ -223,6 +240,7 @@ export function normalizeKreizConfig(input: unknown): KreizConfig {
         key: type.key as string,
         label: type.label as string,
         labelPlural: type.labelPlural as string | undefined,
+        ...(type.labels !== undefined ? { labels: type.labels as ContentTypeUiLabels } : {}),
         routeNamespace: type.routeNamespace as string,
         fields: type.fields as Record<string, FieldDescriptor>,
         template: type.template as string,
