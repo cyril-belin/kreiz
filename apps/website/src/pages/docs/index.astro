@@ -6,8 +6,8 @@ import FeatureCard from '../../components/doc/FeatureCard.astro';
 import { docPages } from '../../lib/doc-nav';
 import { siteUrl } from '../../lib/urls';
 
-const REPO_URL = 'https://github.com/cyril-belin/kreiz';
 const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
 const start = docPages.find((page) => page.id === 'start')!;
 const concepts = docPages.find((page) => page.id === 'concepts')!;
 const developer = docPages.find((page) => page.id === 'developer')!;
@@ -95,12 +95,14 @@ const planPages = docPages.filter((page) => page.id !== 'home');
 
   <div class="mt-16 flex flex-wrap items-center gap-4 border-t border-stone-300/60 pt-10">
     <a
-      href={TEMPLATE_URL}
+      href={ARCHIVE_URL}
       class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-ink"
-    >Utiliser le template&nbsp;→</a>
+    >Télécharger Kreiz&nbsp;→<span class="sr-only"> (télécharge le fichier ZIP)</span></a>
     <a
-      href={REPO_URL}
+      href={TEMPLATE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
       class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
-    >Voir sur GitHub</a>
+    >Utiliser comme template<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
   </div>
 </DocLayout>

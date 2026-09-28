@@ -7,6 +7,7 @@ import Callout from '../../components/doc/Callout.astro';
 
 const REPO_URL = 'https://github.com/cyril-belin/kreiz';
 const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
 const RAW_URL = 'https://github.com/cyril-belin/kreiz/blob/main';
 
 const docs = [
@@ -88,7 +89,7 @@ const docs = [
     <div class="grid gap-5 md:grid-cols-2">
       {
         docs.map((doc) => (
-          <FeatureCard href={doc.href} meta={doc.meta} title={doc.title} text={doc.text} />
+          <FeatureCard href={doc.href} meta={doc.meta} title={doc.title} text={doc.text} external />
         ))
       }
     </div>
@@ -100,7 +101,7 @@ const docs = [
     <div class="mt-6">
       <Callout label="Le README comme point d'entrée">
         <p>
-          Le <a href={REPO_URL}>README du dépôt</a> donne la vue d'une minute&nbsp;:
+          Le <a href={REPO_URL} target="_blank" rel="noopener noreferrer">README du dépôt<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a> donne la vue d'une minute&nbsp;:
           monorepo, capacités, commandes, tableau Project vs Core.
         </p>
       </Callout>
@@ -122,19 +123,21 @@ const docs = [
     </ul>
     <p>
       Pour construire un Project de bout en bout, commencez par le
-      <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md">
-      guide «&nbsp;Construire un Project Kreiz&nbsp;»</a>.
+      <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md" target="_blank" rel="noopener noreferrer">
+      guide «&nbsp;Construire un Project Kreiz&nbsp;»<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>.
     </p>
   </DocSection>
 
   <div class="mt-16 flex flex-wrap items-center gap-4 border-t border-stone-300/60 pt-10">
     <a
-      href={TEMPLATE_URL}
+      href={ARCHIVE_URL}
       class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-ink"
-    >Utiliser le template&nbsp;→</a>
+    >Télécharger Kreiz&nbsp;→<span class="sr-only"> (télécharge le fichier ZIP)</span></a>
     <a
-      href={REPO_URL}
+      href={TEMPLATE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
       class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
-    >Voir sur GitHub</a>
+    >Utiliser comme template<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
   </div>
 </DocLayout>

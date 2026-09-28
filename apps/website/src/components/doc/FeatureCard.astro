@@ -8,13 +8,17 @@ interface Props {
   title: string;
   text: string;
   meta?: string;
+  /** Lien externe (GitHub) : ouvre dans un nouvel onglet, avec rel de sécurité. */
+  external?: boolean;
 }
 
-const { href, title, text, meta } = Astro.props;
+const { href, title, text, meta, external = false } = Astro.props;
 ---
 
 <a
   href={href}
+  target={external ? '_blank' : undefined}
+  rel={external ? 'noopener noreferrer' : undefined}
   class="group block rounded-2xl border border-stone-300/70 bg-white p-7 transition-colors hover:border-ink md:p-8"
 >
   {
@@ -26,6 +30,7 @@ const { href, title, text, meta } = Astro.props;
     class={`flex items-baseline justify-between gap-4 font-display text-2xl font-medium tracking-tight text-ink ${meta ? 'mt-3' : ''}`}
   >
     {title}
+    {external && <span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span>}
     <span aria-hidden="true" class="text-rust transition-transform group-hover:translate-x-1"
       >→</span
     >

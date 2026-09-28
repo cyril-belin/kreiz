@@ -25,6 +25,9 @@ const ogImageUrl = new URL('og.png', siteUrl).href;
 
 const REPO_URL = 'https://github.com/cyril-belin/kreiz';
 const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+// Archive GitHub servie avec Content-Disposition: attachment : le navigateur
+// télécharge sans quitter la page — lien simple, pas de nouvel onglet.
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
 // La documentation publique vit sur la vitrine (/docs) — la doc technique
 // reste accessible depuis /docs/developer (couche avancée, pas 1er contact).
 const DOCS_URL = `${basePath}/docs/`;
@@ -135,11 +138,16 @@ const codeSample = `export const articleType = defineContentType({
         <div class="flex items-center gap-x-6 gap-y-2 text-sm text-stone-600">
           <a href="#fonctionnalites" class="hidden transition-colors hover:text-ink md:inline">Fonctionnalités</a>
           <a href="#philosophie" class="hidden transition-colors hover:text-ink md:inline">Philosophie</a>
-          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
           <a
-            href={TEMPLATE_URL}
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-ink"
+          >GitHub<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
+          <a
+            href={ARCHIVE_URL}
             class="hidden rounded-full border border-stone-400 px-4 py-2 font-medium transition-colors hover:border-ink hover:text-ink sm:inline-block"
-          >Utiliser le template</a>
+          >Télécharger Kreiz<span class="sr-only"> (télécharge le fichier ZIP)</span></a>
         </div>
       </nav>
     </header>
@@ -166,14 +174,23 @@ const codeSample = `export const articleType = defineContentType({
           </p>
           <div class="mt-9 flex flex-wrap items-center justify-center gap-4">
             <a
-              href={TEMPLATE_URL}
+              href={ARCHIVE_URL}
               class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-ink"
-            >Utiliser le template&nbsp;→</a>
+            >Télécharger Kreiz&nbsp;→<span class="sr-only"> (télécharge le fichier ZIP)</span></a>
+            <a
+              href={TEMPLATE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
+            >Utiliser comme template<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
             <a
               href={DOCS_URL}
               class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
             >Lire la documentation</a>
           </div>
+          <p class="mt-5 text-sm text-stone-500">
+            Téléchargez l’archive ZIP ou créez votre propre dépôt depuis le template GitHub.
+          </p>
         </div>
 
         <div class="mx-auto max-w-5xl px-6 pb-20 md:pb-24">
@@ -333,10 +350,18 @@ const codeSample = `export const articleType = defineContentType({
           <pre
             class="mx-auto mt-9 w-fit max-w-full overflow-x-auto rounded-xl bg-white/10 px-5 py-3 text-sm text-stone-200"
           ><code>$ git clone https://github.com/cyril-belin/kreiz.git mon-site</code></pre>
-          <a
-            href={TEMPLATE_URL}
-            class="mt-9 inline-block rounded-full bg-paper px-6 py-3 text-sm font-medium text-ink transition-colors hover:bg-rust hover:text-white"
-          >Utiliser le template&nbsp;→</a>
+          <div class="mt-9 flex flex-wrap items-center justify-center gap-4">
+            <a
+              href={ARCHIVE_URL}
+              class="rounded-full bg-paper px-6 py-3 text-sm font-medium text-ink transition-colors hover:bg-rust hover:text-white"
+            >Télécharger Kreiz&nbsp;→<span class="sr-only"> (télécharge le fichier ZIP)</span></a>
+            <a
+              href={TEMPLATE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-paper hover:text-ink"
+            >Utiliser comme template<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
+          </div>
         </div>
       </section>
     </main>
@@ -348,8 +373,18 @@ const codeSample = `export const articleType = defineContentType({
           breton. Noyau éditorial pour Astro.
         </p>
         <p class="flex gap-6">
-          <a href={LICENSE_URL} class="transition-colors hover:text-ink">Apache-2.0</a>
-          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
+          <a
+            href={LICENSE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-ink"
+          >Apache-2.0<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-ink"
+          >GitHub<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
           <a href={DOCS_URL} class="transition-colors hover:text-ink">Documentation</a>
         </p>
       </div>

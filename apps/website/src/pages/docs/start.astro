@@ -6,6 +6,10 @@ import StepList from '../../components/doc/StepList.astro';
 import Callout from '../../components/doc/Callout.astro';
 import CodeBlock from '../../components/doc/CodeBlock.astro';
 import { siteUrl } from '../../lib/urls';
+
+// Archive GitHub servie avec Content-Disposition: attachment : téléchargement
+// natif, sans quitter la page.
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
 ---
 
 <DocLayout
@@ -24,7 +28,7 @@ import { siteUrl } from '../../lib/urls';
       <ul>
         <li>un compte GitHub&nbsp;;</li>
         <li>Node 24 et pnpm installés&nbsp;;</li>
-        <li>une base PostgreSQL — <a href="https://neon.com">Neon</a> propose une offre gratuite adaptée&nbsp;;</li>
+        <li>une base PostgreSQL — <a href="https://neon.com" target="_blank" rel="noopener noreferrer">Neon<span class="sr-only"> (ouvre un site externe dans un nouvel onglet)</span></a> propose une offre gratuite adaptée&nbsp;;</li>
         <li>si vous vous faites assister, un assistant IA ayant accès au dossier du projet&nbsp;;</li>
         <li>un hébergement pour déployer ensuite (Vercel est la cible de référence).</li>
       </ul>
@@ -76,6 +80,11 @@ import { siteUrl } from '../../lib/urls';
         dépôt&nbsp;: c'est votre site. Kreiz ne s'installe pas depuis npm — le starter
         entier (moteur + site de démonstration) devient votre point de départ.
       </p>
+      <p>
+        Pas encore de compte GitHub&nbsp;? <a href={ARCHIVE_URL}>Téléchargez l'archive
+        ZIP du dépôt<span class="sr-only"> (télécharge le fichier ZIP)</span></a> et
+        décompressez-la — vous pourrez relier votre dossier à GitHub plus tard.
+      </p>
     </li>
     <li>
       <h3>Ouvrez le projet dans votre outil</h3>
@@ -120,8 +129,8 @@ pnpm install`}
       <p>
         Quelques scripts du dépôt ciblent <code>@kreiz/demo</code> — renommez-les pour
         votre application. Le détail exact est dans le
-        <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md">
-          guide développeur</a>.
+        <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md" target="_blank" rel="noopener noreferrer">
+          guide développeur<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>.
       </p>
     </li>
     <li>

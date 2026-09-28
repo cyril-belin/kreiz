@@ -26,7 +26,9 @@ const rootUrl = Astro.site ? new URL(`${basePath}/`, Astro.site).href : `${baseP
 const ogImageUrl = new URL('og.png', rootUrl).href;
 
 const REPO_URL = 'https://github.com/cyril-belin/kreiz';
-const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+// Archive GitHub servie avec Content-Disposition: attachment : le navigateur
+// télécharge sans quitter la page — lien simple, pas de nouvel onglet.
+const ARCHIVE_URL = 'https://github.com/cyril-belin/kreiz/archive/refs/heads/main.zip';
 
 const neighbors = docNeighbors(pageId);
 ---
@@ -71,11 +73,16 @@ const neighbors = docNeighbors(pageId);
           <a href={`${basePath}/`} class="hidden transition-colors hover:text-ink sm:inline">
             Vitrine
           </a>
-          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
           <a
-            href={TEMPLATE_URL}
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-ink"
+          >GitHub<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
+          <a
+            href={ARCHIVE_URL}
             class="hidden rounded-full border border-stone-400 px-4 py-2 font-medium transition-colors hover:border-ink hover:text-ink sm:inline-block"
-          >Utiliser le template</a>
+          >Télécharger Kreiz<span class="sr-only"> (télécharge le fichier ZIP)</span></a>
         </div>
       </nav>
     </header>
@@ -134,7 +141,12 @@ const neighbors = docNeighbors(pageId);
         <p class="flex gap-6">
           <a href={`${basePath}/`} class="transition-colors hover:text-ink">Vitrine</a>
           <a href={siteUrl('/docs/')} class="transition-colors hover:text-ink">Documentation</a>
-          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-ink"
+          >GitHub<span class="sr-only"> (ouvre GitHub dans un nouvel onglet)</span></a>
         </p>
       </div>
     </footer>
