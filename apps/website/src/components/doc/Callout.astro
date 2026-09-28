@@ -1,0 +1,39 @@
+---
+/**
+ * Callout sobre de la documentation : filet, fond teinté, libellé
+ * majuscule. Trois variantes — info (papier), tip (rouille), caution (encre).
+ */
+type CalloutVariant = 'info' | 'tip' | 'caution';
+
+interface Props {
+  variant?: CalloutVariant;
+  label?: string;
+}
+
+const { variant = 'info', label } = Astro.props;
+
+const fallbackLabels: Record<CalloutVariant, string> = {
+  info: 'À savoir',
+  tip: 'Le bon réflexe',
+  caution: 'Attention',
+};
+const styles: Record<CalloutVariant, string> = {
+  info: 'border-stone-300/70 bg-white',
+  tip: 'border-rust/40 bg-rust/5',
+  caution: 'border-ink/30 bg-ink/5',
+};
+const labelColors: Record<CalloutVariant, string> = {
+  info: 'text-stone-400',
+  tip: 'text-rust',
+  caution: 'text-ink',
+};
+---
+
+<aside class={`rounded-2xl border p-6 ${styles[variant]}`}>
+  <p class={`text-xs font-semibold uppercase tracking-[0.2em] ${labelColors[variant]}`}>
+    {label ?? fallbackLabels[variant]}
+  </p>
+  <div class="doc-prose mt-3 text-sm">
+    <slot />
+  </div>
+</aside>

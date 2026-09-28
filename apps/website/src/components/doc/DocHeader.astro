@@ -1,0 +1,29 @@
+---
+/**
+ * En-tête de page doc : ornement rouille, kicker majuscule, grand titre
+ * serif et chapeau — même grammaire visuelle que le héros de la landing.
+ */
+interface Props {
+  kicker: string;
+  title: string;
+  lead: string;
+}
+
+const { kicker, title, lead } = Astro.props;
+---
+
+<div>
+  <p class="flex items-center gap-3" aria-hidden="true">
+    <span class="h-px w-10 bg-rust/50"></span>
+    {/* U+FE0E : présentation texte forcée — sinon Chrome rend ✳ en emoji vert,
+        hors identité rouille. */}
+    <span class="text-rust">{'✳\uFE0E'}</span>
+  </p>
+  <p class="mt-5 text-xs font-medium uppercase tracking-[0.25em] text-stone-500">{kicker}</p>
+  <h1
+    class="mt-4 font-display text-4xl font-medium leading-[1.05] tracking-tight text-ink md:text-5xl"
+  >
+    {title}
+  </h1>
+  <p class="mt-6 max-w-2xl text-lg leading-relaxed text-stone-600">{lead}</p>
+</div>

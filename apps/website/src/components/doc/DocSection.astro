@@ -1,0 +1,27 @@
+---
+/**
+ * Section de page doc : filet horizontal fin, ancre de liaison, titre serif.
+ * Le slot passe par `.doc-prose` (sélecteurs enfants directs — la typo des
+ * cartes/callouts imbriqués n'est pas affectée).
+ */
+interface Props {
+  /** Ancre pour les liens internes (scroll-mt sous l'en-tête). */
+  id: string;
+  title: string;
+  kicker?: string;
+}
+
+const { id, title, kicker } = Astro.props;
+---
+
+<section id={id} class="scroll-mt-16 border-t border-stone-300/60 pt-12 lg:pt-16">
+  {kicker && <p class="text-xs font-medium uppercase tracking-[0.25em] text-stone-500">{kicker}</p>}
+  <h2
+    class={`font-display text-3xl font-medium tracking-tight text-ink md:text-4xl ${kicker ? 'mt-4' : ''}`}
+  >
+    {title}
+  </h2>
+  <div class="doc-prose mt-6">
+    <slot />
+  </div>
+</section>

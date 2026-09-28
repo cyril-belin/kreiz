@@ -1,0 +1,106 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import FeatureCard from '../../components/doc/FeatureCard.astro';
+import { docPages } from '../../lib/doc-nav';
+import { siteUrl } from '../../lib/urls';
+
+const REPO_URL = 'https://github.com/cyril-belin/kreiz';
+const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+const start = docPages.find((page) => page.id === 'start')!;
+const concepts = docPages.find((page) => page.id === 'concepts')!;
+const developer = docPages.find((page) => page.id === 'developer')!;
+const planPages = docPages.filter((page) => page.id !== 'home');
+---
+
+<DocLayout
+  title="Documentation — Kreiz"
+  description="La documentation publique de Kreiz : créer votre site, comprendre le moteur, construire avec une IA, personnaliser et déployer."
+  pageId="home"
+>
+  <DocHeader
+    kicker="Documentation"
+    title="Construisez votre site avec Kreiz."
+    lead="Kreiz est le moteur. Votre site reste votre site. Vous pouvez le construire à la main — ou le faire construire par une IA."
+  />
+
+  <div class="mt-12 grid gap-5 md:grid-cols-3">
+    <FeatureCard
+      href={siteUrl(start.href)}
+      meta="Guide pas à pas"
+      title="Je veux créer un site rapidement"
+      text="Dix étapes, du template GitHub au premier contenu publié — en le faisant vous-même ou en vous faisant assister par une IA."
+    />
+    <FeatureCard
+      href={siteUrl(concepts.href)}
+      meta="Architecture"
+      title="Je veux comprendre Kreiz"
+      text="Le moteur, le Project, le back-office, Save ≠ Publish : l'essentiel expliqué en langage humain."
+    />
+    <FeatureCard
+      href={siteUrl(developer.href)}
+      meta="Référence"
+      title="Je suis développeur"
+      text="API publique, configuration complète, architecture détaillée : la documentation technique, versionnée avec le code."
+    />
+  </div>
+
+  <div class="mt-5 rounded-2xl border border-rust/40 bg-rust/5 p-7 md:p-8">
+    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-rust">Kreiz et l'IA</p>
+    <p class="mt-3 font-display text-2xl font-medium tracking-tight text-ink">
+      Décrivez le site que vous voulez.
+    </p>
+    <p class="mt-3 max-w-2xl text-sm leading-relaxed text-stone-700">
+      Votre IA modifie le Project&nbsp;; Kreiz garde le moteur éditorial stable. Le prompt
+      maître est prêt à être copié dans un assistant qui a accès aux fichiers du
+      projet — Codex, Claude Code, Cursor, Windsurf… — et des exemples de demandes
+      vous donnent le départ.
+    </p>
+    <a
+      href={siteUrl('/docs/ai/')}
+      class="mt-5 inline-block rounded-full bg-rust px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-ink"
+    >Construire avec une IA&nbsp;→</a>
+  </div>
+
+  <DocSection id="plan" title="Le plan de la documentation">
+    <p>
+      Six guides et cette page, plutôt qu'une encyclopédie. L'ordre de lecture ci-dessous
+      suit la vie d'un site&nbsp;; chaque page reste lisible seule.
+    </p>
+    <ul>
+      {
+        planPages.map((page) => (
+          <li>
+            <a href={siteUrl(page.href)}>{page.label}</a> — {page.description}
+          </li>
+        ))
+      }
+    </ul>
+  </DocSection>
+
+  <DocSection id="principe" title="Le principe, en une phrase">
+    <p>
+      Kreiz fournit le moteur éditorial — back-office, publication, médias, formulaires,
+      analytics, SEO. Votre <strong>Project</strong> contient le site visible&nbsp;:
+      ses pages, son design, ses types de contenu. Vous pouvez demander à une IA de
+      construire ou de modifier le Project&nbsp;; le Core, lui, reste stable.
+    </p>
+    <p>
+      Vous n'avez pas besoin de connaître tout Astro pour commencer — et Kreiz n'est
+      pas du no-code&nbsp;: c'est un starter code-first, lisible, que vous pilotez
+      avec votre outil préféré.
+    </p>
+  </DocSection>
+
+  <div class="mt-16 flex flex-wrap items-center gap-4 border-t border-stone-300/60 pt-10">
+    <a
+      href={TEMPLATE_URL}
+      class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-ink"
+    >Utiliser le template&nbsp;→</a>
+    <a
+      href={REPO_URL}
+      class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
+    >Voir sur GitHub</a>
+  </div>
+</DocLayout>

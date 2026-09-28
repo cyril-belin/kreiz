@@ -1,0 +1,314 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import Callout from '../../components/doc/Callout.astro';
+import CopyPrompt from '../../components/doc/CopyPrompt.astro';
+import { siteUrl } from '../../lib/urls';
+
+const MASTER_PROMPT = `Tu travailles dans un projet Kreiz.
+
+Kreiz est un moteur éditorial pour Astro, organisé en monorepo pnpm :
+- packages/core contient le moteur (@kreiz/core). Si une modification de
+  packages/core semble nécessaire, arrête-toi : explique précisément pourquoi
+  le Project ne suffit pas et attends mon accord explicite avant de toucher
+  au Core.
+- apps/<votre-app> est mon site : c'est ici que tout se passe.
+- Utilise uniquement l'API publique de @kreiz/core (@kreiz/core, /content,
+  /forms, /media, /seo, /analytics, /data). Pas d'import profond dans le Core.
+
+Commence par lire l'existant :
+- l'application sous apps/<votre-app> (types de contenu, formulaires,
+  templates, pages, styles, schéma) ;
+- les patterns du Project et les exemples d'apps/demo ;
+- la documentation utile dans docs/ (build-a-project.md, api.md,
+  configuration.md).
+
+Méthode de travail :
+- une demande à la fois, sans anticiper la suite ;
+- avant tout changement conséquent, propose-moi un plan bref et attends
+  mon accord ;
+- exécute les validations pertinentes (typecheck, build, lint) ;
+- si le changement est visuel, vérifie le rendu dans le navigateur,
+  desktop et mobile ;
+- à la fin, liste les fichiers modifiés.
+
+Cadre à respecter :
+- Les types de contenu se déclarent en code (src/content-types/) ; le
+  back-office est généré à partir de ces déclarations.
+- Les templates (src/templates/) rendent les données ; le même template sert
+  au site public et à la preview de l'admin.
+- Les pages publiques vivent dans src/pages/ et prérendent les contenus
+  publiés (createContentReader). Respecte le modèle Save ≠ Publish : n'écris
+  jamais directement dans les données publiées.
+- Le schéma de base appartient à l'app (src/schema.ts + drizzle). Ne
+  contourne pas les migrations.
+- Le contenu et la présentation restent séparés. Le design m'appartient :
+  propose-moi une direction avant de coder une page importante.
+
+Sans mon accord explicite, jamais : commit, push, déploiement, modification
+d'un secret, déclenchement d'une action externe.
+
+Mon site : <nom du site>. Public visé : <qui visite le site>.
+Je veux créer : <décrivez les pages, les types de contenu, le ton, le style>.`;
+
+const EXAMPLES = [
+  {
+    id: 'exemple-garage',
+    text: "Crée un site pour un garage automobile avec : Accueil, Services, Véhicules, À propos, Contact.",
+  },
+  {
+    id: 'exemple-realisation',
+    text: 'Ajoute un type de contenu Réalisation avec : titre, description, galerie, date, client.',
+  },
+  {
+    id: 'exemple-accueil',
+    text: "Refais la page d'accueil dans un style éditorial premium.",
+  },
+  {
+    id: 'exemple-devis',
+    text: 'Ajoute un formulaire de demande de devis.',
+  },
+  {
+    id: 'exemple-equipe',
+    text: 'Ajoute une section équipe modifiable depuis Kreiz.',
+  },
+  {
+    id: 'exemple-faq',
+    text: 'Ajoute une page FAQ.',
+  },
+];
+
+const BRIEFS = [
+  {
+    id: 'brief-site',
+    title: 'Brief complet — Créer un site',
+    text: `Crée un site pour un garage automobile.
+
+Public :
+particuliers locaux.
+
+Pages :
+Accueil, Services, Véhicules, À propos, Contact.
+
+Contenus éditables :
+Services, Véhicules, Actualités.
+
+Style :
+sobre, professionnel, local, pas de look SaaS.
+
+Contraintes :
+- ne modifie pas le Core ;
+- utilise les types de contenu Kreiz ;
+- garde le site responsive ;
+- vérifie SEO et navigation ;
+- lance build et tests pertinents.
+
+Avant de modifier :
+résume ton plan.`,
+  },
+  {
+    id: 'brief-type-contenu',
+    title: 'Brief complet — Ajouter un type de contenu',
+    text: `Ajoute un type de contenu Réalisation.
+
+Champs :
+- titre (fourni par Kreiz, ne pas le redéclarer)
+- résumé
+- description riche
+- client
+- date
+- image de couverture
+- galerie si supportée par le Project
+
+Route :
+/realisations/[slug]
+
+Créer :
+- déclaration du type
+- page publique
+- template
+- listing si nécessaire
+
+Vérifier :
+- admin, Save, Preview, Publish
+- page publique
+- SEO
+- build
+
+Ne modifie pas le Core.`,
+  },
+  {
+    id: 'brief-page',
+    title: 'Brief complet — Refaire une page',
+    text: `Refais la page d'accueil dans un style éditorial premium.
+
+Conserver :
+- contenu existant
+- navigation
+- SEO
+- routes
+- types de contenu
+- formulaires
+
+Modifier uniquement :
+- composition
+- typographie
+- spacing
+- composants visuels
+- responsive
+
+Ne touche pas au Core.
+
+Avant de coder :
+analyse la page actuelle et propose un plan court.
+
+Après :
+vérifie le rendu desktop + mobile et lance le build.`,
+  },
+];
+---
+
+<DocLayout
+  title="Kreiz et l'IA — Documentation Kreiz"
+  description="Construisez votre site Kreiz avec une IA : le prompt maître à copier, ce que l'IA peut faire, ce qu'elle doit éviter, et des exemples de demandes."
+  pageId="ai"
+>
+  <DocHeader
+    kicker="Avec une IA"
+    title="Construire avec Kreiz et une IA."
+    lead="Kreiz a été conçu pour être construit avec une IA. Le Core est stable et documenté ; le Project est un petit code lisible. Décrivez ce que vous voulez : l'IA exécute dans le Project, vous gardez la décision."
+  />
+
+  <DocSection id="role" title="Le rôle de chacun">
+    <p>
+      La répartition est simple&nbsp;: votre IA travaille dans le Project, Kreiz garde le
+      moteur. Vous gardez la décision.
+    </p>
+    <p>
+      Précision importante&nbsp;: utilisez un assistant ou agent IA qui peut <strong>lire
+      et modifier le dossier de votre projet</strong> — Codex, Claude Code, Cursor,
+      Windsurf ou un autre agent compatible. Une conversation IA sans accès aux fichiers
+      peut vous conseiller, mais ne peut pas modifier le Project.
+    </p>
+    <div class="mt-8 grid gap-5 md:grid-cols-2">
+      <div class="rounded-2xl border border-rust/40 bg-rust/5 p-7">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-rust">
+          Ce que votre IA peut faire
+        </h3>
+        <ul class="doc-prose mt-5">
+          <li>Créer le frontend et les pages</li>
+          <li>Créer les types de contenu et leurs champs</li>
+          <li>Créer les formulaires</li>
+          <li>Adapter la direction artistique</li>
+          <li>Connecter les composants</li>
+          <li>Améliorer la navigation</li>
+          <li>Créer de nouveaux layouts</li>
+          <li>Ajouter des fonctionnalités dans le Project</li>
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-stone-300/70 bg-white p-7">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-stone-400">
+          Ce que votre IA doit éviter
+        </h3>
+        <ul class="doc-prose mt-5">
+          <li>Modifier <code>packages/core</code> sans nécessité absolue</li>
+          <li>Sortir de l'API publique de <code>@kreiz/core</code></li>
+          <li>Mélanger le contenu et la présentation</li>
+          <li>Casser Save ≠ Publish (écrire dans les données publiées)</li>
+          <li>Contourner les migrations Drizzle</li>
+        </ul>
+      </div>
+    </div>
+    <p>
+      Ces limites ne réduisent pas l'IA&nbsp;: les garde-fous du Core — authentification,
+      CSRF, publication, médias, validation — sont écrits une fois pour tous et couverts
+      par sa suite de tests. La mise en production reste ensuite une affaire de
+      configuration, décrite dans <a href={siteUrl('/docs/deploy/')}>Déployer</a>&nbsp;;
+      les conditions exactes sont listées dans la page
+      <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/production-readiness.md">
+      Production readiness</a> du dépôt.
+    </p>
+  </DocSection>
+
+  <DocSection id="prompt" title="Le prompt maître">
+    <p>
+      Copiez ce prompt au début de votre session, puis remplacez les passages entre
+      chevrons. Il fixe le cadre Kreiz&nbsp;: où travailler, quoi ne pas toucher, comment
+      travailler, quand s'arrêter.
+    </p>
+    <p>
+      Vous n'avez pas besoin de comprendre ce bloc. Copiez-le tel quel dans un assistant
+      qui a accès au dossier de votre projet — une conversation IA sans accès aux
+      fichiers ne peut pas modifier le Project.
+    </p>
+    <CopyPrompt
+      id="kreiz-master-prompt"
+      title="Prompt maître Kreiz"
+      buttonLabel="Copier le prompt"
+      text={MASTER_PROMPT}
+    />
+    <div class="mt-6">
+      <Callout variant="tip" label="Le bon réflexe">
+        <p>
+          Gardez ce prompt à portée de main — dans vos notes ou à la racine de votre
+          dépôt. Chaque session d'IA repart du même cadre, quel que soit l'outil.
+        </p>
+      </Callout>
+    </div>
+  </DocSection>
+
+  <DocSection id="exemples" title="Exemples de demandes">
+    <p>
+      Si vous ne savez pas quoi demander, partez d'une de ces phrases. Une demande à la
+      fois reste le plus efficace&nbsp;: l'IA crée, vous vérifiez dans le back-office et
+      sur le site, puis vous enchaînez.
+    </p>
+    {
+      EXAMPLES.map((example) => (
+        <CopyPrompt id={example.id} text={example.text} variant="quote" />
+      ))
+    }
+    <h3>Trois briefs complets, à copier puis adapter</h3>
+    <p>
+      Pour les tâches plus larges, un brief structuré évite les allers-retours&nbsp;:
+      le contexte, les limites, et ce qui doit être vérifié à la fin.
+    </p>
+    {
+      BRIEFS.map((brief) => (
+        <CopyPrompt id={brief.id} title={brief.title} text={brief.text} />
+      ))
+    }
+  </DocSection>
+
+  <DocSection id="demander-juste" title="Demander juste">
+    <ul>
+      <li>
+        Décrivez d'abord <strong>les pages et le contenu</strong>, le style ensuite&nbsp;:
+        l'ordre naturel d'un site.
+      </li>
+      <li>
+        Nommez les types de contenu comme vous voulez les voir dans l'admin —
+        <em>Réalisations</em>, <em>Services</em>, <em>Équipe</em>… ce sont les libellés du
+        back-office.
+      </li>
+      <li>
+        Dites ce qui ne change pas&nbsp;: <em>«&nbsp;ne touche pas à
+        <code>packages/core</code>&nbsp;»</em> est une phrase que votre IA doit entendre
+        souvent.
+      </li>
+      <li>
+        Sachez reconnaître la fin d'une tâche. Après l'ajout d'un type de contenu par
+        exemple, la chaîne complète doit passer&nbsp;: formulaire admin, sauvegarde,
+        preview, publication, page publique, SEO, build — et navigation si une page
+        s'y ajoute.
+      </li>
+    </ul>
+    <p>
+      Et si un changement vous échappe, tout se vérifie&nbsp;: le contenu vit dans le
+      back-office, le design dans votre Project, et
+      <a href="https://github.com/cyril-belin/kreiz">le Core est sur GitHub</a> pour
+      comprendre la mécanique.
+    </p>
+  </DocSection>
+</DocLayout>

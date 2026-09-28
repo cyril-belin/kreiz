@@ -1,0 +1,191 @@
+---
+/**
+ * Layout des pages de la documentation publique — même identité « papier
+ * éditorial » que la landing (tokens partagés de global.css), grille
+ * sommaire + contenu, URLs canoniques/OG dérivées de site + base (jamais
+ * de concaténation manuelle). Statique, sans base, sans secret ; le seul
+ * JavaScript est le petit script de copie inline (aucun bundle émis).
+ */
+import '../styles/global.css';
+import DocSidebar from '../components/doc/DocSidebar.astro';
+import { docNeighbors } from '../lib/doc-nav';
+import { basePath, siteUrl } from '../lib/urls';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Identifiant de la page doc (doc-nav) — sommaire + pager. */
+  pageId: string;
+}
+
+const { title, description, pageId } = Astro.props;
+
+const pageHref = pageId === 'home' ? '/docs/' : `/docs/${pageId}/`;
+const pageUrl = Astro.site ? new URL(siteUrl(pageHref), Astro.site).href : siteUrl(pageHref);
+const rootUrl = Astro.site ? new URL(`${basePath}/`, Astro.site).href : `${basePath}/`;
+const ogImageUrl = new URL('og.png', rootUrl).href;
+
+const REPO_URL = 'https://github.com/cyril-belin/kreiz';
+const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+
+const neighbors = docNeighbors(pageId);
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={pageUrl} />
+    <link rel="icon" type="image/svg+xml" href={`${basePath}/favicon.svg`} />
+    <meta name="theme-color" content="#faf7f1" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={pageUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+  </head>
+  <body class="min-h-screen bg-paper font-sans text-ink antialiased">
+    <a
+      href="#contenu"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-6 focus:top-6 focus:z-50 focus:rounded-full focus:bg-ink focus:px-5 focus:py-3 focus:text-sm focus:text-paper"
+    >
+      Aller au contenu
+    </a>
+
+    <header class="border-b border-stone-300/60">
+      <nav
+        class="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-x-8 gap-y-3 px-6 py-5"
+        aria-label="En-tête du site"
+      >
+        <a href={`${basePath}/`} class="font-display text-2xl font-semibold tracking-tight">Kreiz</a>
+        <div class="flex items-center gap-x-6 gap-y-2 text-sm text-stone-600">
+          <a href={`${basePath}/`} class="hidden transition-colors hover:text-ink sm:inline">
+            Vitrine
+          </a>
+          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
+          <a
+            href={TEMPLATE_URL}
+            class="hidden rounded-full border border-stone-400 px-4 py-2 font-medium transition-colors hover:border-ink hover:text-ink sm:inline-block"
+          >Utiliser le template</a>
+        </div>
+      </nav>
+    </header>
+
+    <div
+      class="mx-auto grid max-w-6xl gap-x-16 gap-y-12 px-6 py-12 lg:grid-cols-[240px_minmax(0,1fr)] lg:py-16"
+    >
+      <DocSidebar current={pageId} />
+      <main id="contenu" class="min-w-0 max-w-3xl">
+        <slot />
+
+        {
+          (neighbors.prev || neighbors.next) && (
+            <nav
+              aria-label="Pages voisines"
+              class="mt-16 grid gap-8 border-t border-stone-300/60 pt-8 sm:grid-cols-2"
+            >
+              <div>
+                {neighbors.prev && (
+                  <a href={siteUrl(neighbors.prev.href)} class="group block">
+                    <p class="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">
+                      ← Précédent
+                    </p>
+                    <p class="mt-1 font-display text-xl font-medium text-ink group-hover:text-rust">
+                      {neighbors.prev.label}
+                    </p>
+                  </a>
+                )}
+              </div>
+              <div class="sm:text-right">
+                {neighbors.next && (
+                  <a href={siteUrl(neighbors.next.href)} class="group block">
+                    <p class="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">
+                      Suivant →
+                    </p>
+                    <p class="mt-1 font-display text-xl font-medium text-ink group-hover:text-rust">
+                      {neighbors.next.label}
+                    </p>
+                  </a>
+                )}
+              </div>
+            </nav>
+          )
+        }
+      </main>
+    </div>
+
+    <footer class="border-t border-stone-300/60">
+      <div
+        class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-6 py-10 text-sm text-stone-500"
+      >
+        <p>
+          <span class="font-display italic">Kreiz</span> — «&nbsp;centre&nbsp;» en breton. Noyau
+          éditorial pour Astro.
+        </p>
+        <p class="flex gap-6">
+          <a href={`${basePath}/`} class="transition-colors hover:text-ink">Vitrine</a>
+          <a href={siteUrl('/docs/')} class="transition-colors hover:text-ink">Documentation</a>
+          <a href={REPO_URL} class="transition-colors hover:text-ink">GitHub</a>
+        </p>
+      </div>
+    </footer>
+
+    <script is:inline>
+      // Copie des prompts et commandes : une seule délégation d'événement
+      // pour toute la documentation — aucun bundle JS n'est émis au build.
+      (function () {
+        'use strict';
+        function flash(button) {
+          var label = button.querySelector('[data-copy-label]');
+          if (!label || label.dataset.locked === '1') return;
+          var original = label.textContent;
+          label.dataset.locked = '1';
+          label.textContent = 'Copié ✓';
+          window.setTimeout(function () {
+            label.textContent = original;
+            delete label.dataset.locked;
+          }, 2000);
+        }
+        document.addEventListener('click', function (event) {
+          var button =
+            event.target instanceof Element
+              ? event.target.closest('[data-copy-target]')
+              : null;
+          if (!button) return;
+          var source = document.getElementById(button.getAttribute('data-copy-target'));
+          var text = source ? source.textContent || '' : '';
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+              function () {
+                flash(button);
+              },
+              function () {}
+            );
+          } else if (source) {
+            var range = document.createRange();
+            range.selectNodeContents(source);
+            var selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+              document.execCommand('copy');
+              flash(button);
+            } catch (error) {
+              /* le texte reste sélectionné : copie manuelle possible */
+            }
+            selection.removeAllRanges();
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

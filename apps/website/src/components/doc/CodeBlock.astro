@@ -1,0 +1,46 @@
+---
+/**
+ * Bloc code noir profond (même traitement que la landing) avec barre de
+ * titre fine et bouton Copier optionnel — la copie passe par le script
+ * délégué du DocLayout (`data-copy-target`), aucun JS par composant.
+ */
+interface Props {
+  code: string;
+  title?: string;
+  /** Étiquette de langage affichée à droite de la barre (ex. `sh`). */
+  lang?: string;
+  copy?: boolean;
+}
+
+const { code, title, lang, copy = false } = Astro.props;
+const blockId = `code-${Math.random().toString(36).slice(2, 10)}`;
+const showBar = Boolean(title || lang || copy);
+---
+
+<figure class="mt-6 overflow-hidden rounded-2xl bg-ink">
+  {
+    showBar && (
+      <figcaption class="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-2.5">
+        <span class="truncate text-xs font-medium text-stone-400">{title}</span>
+        <span class="flex items-center gap-4">
+          {lang && (
+            <span class="text-[11px] uppercase tracking-[0.2em] text-stone-500">{lang}</span>
+          )}
+          {copy && (
+            <button
+              type="button"
+              data-copy-target={blockId}
+              class="rounded-full border border-white/25 px-3 py-1 text-xs font-medium text-stone-300 transition-colors hover:border-white hover:text-white"
+            >
+              <span data-copy-label aria-live="polite">Copier</span>
+            </button>
+          )}
+        </span>
+      </figcaption>
+    )
+  }
+  <pre
+    id={blockId}
+    class="overflow-x-auto p-5 text-[13px] leading-relaxed text-stone-300 md:p-6"
+  ><code>{code}</code></pre>
+</figure>

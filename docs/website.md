@@ -94,6 +94,20 @@ Pages → **Source : GitHub Actions**.
 
 La vitrine **présente** Kreiz ; la démo **prouve** Kreiz. Le bouton
 « Utiliser le template » pointe vers GitHub (le repo est marqué Template
-Repository) ; « Lire la documentation » vers `docs/build-a-project.md`.
-Aucune route `/admin` n'existe sur la vitrine — l'admin SSR appartient à
-la démo/production, pas à un hébergeur statique.
+Repository) ; « Lire la documentation » vers la documentation publique de la
+vitrine (`/docs/`). Aucune route `/admin` n'existe sur la vitrine — l'admin
+SSR appartient à la démo/production, pas à un hébergeur statique.
+
+## Documentation publique (`/docs`)
+
+La vitrine héberge la documentation publique — le premier contact, avant la
+couche technique de `docs/` :
+
+- 7 pages : `/docs/` (accueil), `start`, `concepts`, `ai` (prompt maître à
+  copier), `customize`, `deploy`, `developer` (renvoi vers `docs/*.md` du
+  dépôt) — sources dans `src/pages/docs/`, composants partagés dans
+  `src/components/doc/`, layout dans `src/layouts/DocLayout.astro` ;
+- même identité que la landing (tokens `global.css` : papier/encre/rouille,
+  Fraunces), sommaire sticky desktop et accordéon `<details>` natif mobile ;
+- le seul JavaScript est un petit script **inline** de copie de prompts
+  (délégation d'événement) : le build n'émet toujours **aucun fichier JS**.

@@ -1,0 +1,140 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import FeatureCard from '../../components/doc/FeatureCard.astro';
+import Callout from '../../components/doc/Callout.astro';
+
+const REPO_URL = 'https://github.com/cyril-belin/kreiz';
+const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
+const RAW_URL = 'https://github.com/cyril-belin/kreiz/blob/main';
+
+const docs = [
+  {
+    href: `${RAW_URL}/docs/build-a-project.md`,
+    meta: 'Guide',
+    title: 'Construire un Project Kreiz',
+    text: "Le guide de référence : template, application, schéma et migrations, types de contenu, formulaires, déploiement — sans lire le code du Core.",
+  },
+  {
+    href: `${RAW_URL}/docs/architecture.md`,
+    meta: 'Architecture',
+    title: 'Architecture du Core',
+    text: 'Les couches (domain, services, ports, adapters, data, http, admin), l\'intégration Astro et le modèle Save/Publish/Snapshot/Build.',
+  },
+  {
+    href: `${RAW_URL}/docs/api.md`,
+    meta: 'API',
+    title: 'API publique de @kreiz/core',
+    text: 'La surface réellement supportée, sous-chemin par sous-chemin : contexte d\'exécution, symboles, stabilité. La carte exports est la frontière.',
+  },
+  {
+    href: `${RAW_URL}/docs/configuration.md`,
+    meta: 'Référence',
+    title: 'Configuration',
+    text: 'Chaque section de kreiz({...}) et chaque variable KREIZ_* : obligations, défauts, groupes tout-ou-rien, dev vs production.',
+  },
+  {
+    href: `${RAW_URL}/docs/operations.md`,
+    meta: 'Exploitation',
+    title: 'Opérer un Project',
+    text: 'Migrations, sauvegardes attendues, table de recovery, rétentions, cron de maintenance, monitoring.',
+  },
+  {
+    href: `${RAW_URL}/docs/handoff.md`,
+    meta: 'Reprise',
+    title: 'Handoff développeur',
+    text: 'Commandes, environnement, baseline de performance, état des tests — pour reprendre le dépôt sans reconstituer l\'histoire.',
+  },
+  {
+    href: `${RAW_URL}/docs/technical-debt.md`,
+    meta: 'Honnêteté',
+    title: 'Registre de dette technique',
+    text: 'Les dettes et limitations V1 assumées, avec leur impact et leur plan.',
+  },
+  {
+    href: `${RAW_URL}/docs/production-readiness.md`,
+    meta: 'État',
+    title: 'Production readiness',
+    text: 'Prêt / conditionnel / pas encore : l\'état réel du projet pour la production.',
+  },
+  {
+    href: `${RAW_URL}/docs/security-review-final.md`,
+    meta: 'Sécurité',
+    title: 'Revue de sécurité finale',
+    text: 'La revue adversariale du Core complet, la revue senior indépendante et les conditions restantes.',
+  },
+  {
+    href: `${RAW_URL}/docs/privacy-data-map.md`,
+    meta: 'Vie privée',
+    title: 'Cartographie des données',
+    text: 'Le contenu de chaque table, pour une revue RGPD sans reverse-engineering du schéma.',
+  },
+];
+---
+
+<DocLayout
+  title="Documentation développeur — Documentation Kreiz"
+  description="La couche avancée de Kreiz : guide de construction, architecture, API publique, configuration, opérations, sécurité — versionnée avec le code."
+  pageId="developer"
+>
+  <DocHeader
+    kicker="Aller plus loin"
+    title="Documentation développeur."
+    lead="La couche avancée. Tout ce que cette documentation résume se trouve ici, écrit pour des développeurs — dans le dépôt, versionné avec le code."
+  />
+
+  <DocSection id="reference" title="Les documents de référence">
+    <div class="grid gap-5 md:grid-cols-2">
+      {
+        docs.map((doc) => (
+          <FeatureCard href={doc.href} meta={doc.meta} title={doc.title} text={doc.text} />
+        ))
+      }
+    </div>
+    <p>
+      Ces fichiers vivent dans <code>docs/</code> du dépôt. En cas de divergence, le code
+      fait foi — et chaque document s'engage à être corrigé plutôt qu'à décrire un
+      passé idéalisé.
+    </p>
+    <div class="mt-6">
+      <Callout label="Le README comme point d'entrée">
+        <p>
+          Le <a href={REPO_URL}>README du dépôt</a> donne la vue d'une minute&nbsp;:
+          monorepo, capacités, commandes, tableau Project vs Core.
+        </p>
+      </Callout>
+    </div>
+  </DocSection>
+
+  <DocSection id="conventions" title="Deux conventions à connaître">
+    <ul>
+      <li>
+        <strong>La frontière est mécanique</strong> — la carte <code>exports</code> du
+        paquet est la seule surface publique&nbsp;; un import profond dans le Core casse
+        le typecheck, pas seulement la convention.
+      </li>
+      <li>
+        <strong>Le schéma appartient à l'app</strong> — le Core ne possède aucune
+        migration&nbsp;: le Project compose ses tables via <code>defineCoreTables()</code>
+        et possède sa chaîne Drizzle.
+      </li>
+    </ul>
+    <p>
+      Pour construire un Project de bout en bout, commencez par le
+      <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md">
+      guide «&nbsp;Construire un Project Kreiz&nbsp;»</a>.
+    </p>
+  </DocSection>
+
+  <div class="mt-16 flex flex-wrap items-center gap-4 border-t border-stone-300/60 pt-10">
+    <a
+      href={TEMPLATE_URL}
+      class="rounded-full bg-rust px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-ink"
+    >Utiliser le template&nbsp;→</a>
+    <a
+      href={REPO_URL}
+      class="rounded-full border border-stone-400 px-6 py-3 text-sm font-medium transition-colors hover:border-ink"
+    >Voir sur GitHub</a>
+  </div>
+</DocLayout>

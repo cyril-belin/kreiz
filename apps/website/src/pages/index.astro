@@ -25,7 +25,9 @@ const ogImageUrl = new URL('og.png', siteUrl).href;
 
 const REPO_URL = 'https://github.com/cyril-belin/kreiz';
 const TEMPLATE_URL = 'https://github.com/cyril-belin/kreiz/generate';
-const DOCS_URL = 'https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md';
+// La documentation publique vit sur la vitrine (/docs) — la doc technique
+// reste accessible depuis /docs/developer (couche avancée, pas 1er contact).
+const DOCS_URL = `${basePath}/docs/`;
 const LICENSE_URL = 'https://github.com/cyril-belin/kreiz/blob/main/LICENSE';
 
 const websiteLd = {

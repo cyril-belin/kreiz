@@ -19,3 +19,56 @@ a:focus-visible {
   outline: 2px solid var(--color-rust);
   outline-offset: 3px;
 }
+
+/*
+ * Documentation publique (/docs) — vocabulaire typographique partagé.
+ * Namespaces `.doc-*` : la landing n'utilise aucune de ces classes et reste
+ * inchangée. Sélecteurs enfants directs uniquement, pour ne pas retoucher à
+ * la typo interne des cartes et callouts.
+ */
+@layer components {
+  .doc-prose {
+    font-size: 0.9375rem;
+  }
+  .doc-prose > p {
+    @apply mt-4 leading-relaxed text-stone-600;
+  }
+  .doc-prose > p:first-child {
+    @apply mt-0;
+  }
+  .doc-prose > a {
+    @apply font-medium text-ink underline decoration-rust/50 decoration-1 underline-offset-4 transition-colors hover:decoration-rust;
+  }
+  .doc-prose > strong,
+  .doc-prose > p strong {
+    @apply font-medium text-ink;
+  }
+  .doc-prose > h3 {
+    @apply mt-12 font-display text-2xl font-medium tracking-tight text-ink;
+  }
+  .doc-prose > ul {
+    @apply mt-4 list-disc space-y-2 pl-5 marker:text-rust;
+  }
+  .doc-prose > ol {
+    @apply mt-4 list-decimal space-y-2 pl-5 marker:text-rust;
+  }
+  .doc-prose > ul a,
+  .doc-prose > ol a {
+    @apply font-medium text-ink underline decoration-rust/50 decoration-1 underline-offset-4 transition-colors hover:decoration-rust;
+  }
+  .doc-prose code:not(pre code) {
+    @apply rounded-md border border-stone-200 bg-stone-100 px-1.5 py-0.5 font-mono text-[0.85em] text-ink;
+  }
+  .doc-table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .doc-table th {
+    @apply border-b border-stone-300 pb-3 pr-6 align-bottom text-xs font-semibold uppercase tracking-[0.18em] text-stone-400;
+  }
+  .doc-table td {
+    @apply border-b border-stone-200 py-4 pr-6 align-top leading-relaxed text-stone-600;
+  }
+  .doc-table td:first-child {
+    @apply font-medium whitespace-nowrap text-ink;
+  }
+}

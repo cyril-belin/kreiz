@@ -1,0 +1,212 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import Callout from '../../components/doc/Callout.astro';
+---
+
+<DocLayout
+  title="Comprendre Kreiz — Documentation Kreiz"
+  description="Le moteur et votre site, le back-office, les types de contenu, Save ≠ Publish : l'architecture de Kreiz expliquée en langage humain."
+  pageId="concepts"
+>
+  <DocHeader
+    kicker="Comprendre"
+    title="Comprendre Kreiz."
+    lead="Kreiz sépare deux choses : le moteur éditorial, qui ne bouge pas — et votre site, qui vous ressemble."
+  />
+
+  <DocSection id="moteur-et-site" title="Le moteur et votre site">
+    <p>
+      Kreiz fournit le <strong>moteur éditorial</strong> — le Core, le paquet
+      <code>@kreiz/core</code>&nbsp;: back-office, publication, médias, formulaires,
+      analytics, SEO. Il est partagé par tous les sites Kreiz et reste stable.
+    </p>
+    <p>
+      Votre site — le <strong>Project</strong> — est une application Astro qui consomme le
+      Core par son API publique. C'est lui qui décide de tout ce qui se voit&nbsp;: la
+      marque, les types de contenu, les templates, les mots.
+    </p>
+    <div class="mt-8 grid gap-5 md:grid-cols-2">
+      <div class="rounded-2xl border border-stone-300/70 bg-white p-7">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-stone-400">
+          Kreiz fournit (le Core)
+        </h3>
+        <ul class="doc-prose mt-5">
+          <li>Le back-office privé (<code>/admin</code>)</li>
+          <li>La publication et ses snapshots figés</li>
+          <li>La médiathèque et le pipeline d'images</li>
+          <li>Les formulaires de contact et leur anti-spam</li>
+          <li>Les analytics privacy-first</li>
+          <li>Le SEO (canonical, sitemap, JSON-LD)</li>
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-rust/40 bg-rust/5 p-7">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-rust">
+          Votre Project décide
+        </h3>
+        <ul class="doc-prose mt-5">
+          <li>Les types de contenu et leurs champs</li>
+          <li>Les templates et les pages publiques</li>
+          <li>Les couleurs, la typographie, le layout</li>
+          <li>La navigation et les composants</li>
+          <li>Les mots, le ton, la marque</li>
+          <li>Le schéma de base et ses migrations</li>
+        </ul>
+      </div>
+    </div>
+    <p>
+      La frontière est mécanique, pas une convention&nbsp;: le Project n'importe que
+      l'API publique du Core, et le Core n'impose jamais de présentation.
+    </p>
+  </DocSection>
+
+  <DocSection id="mots" title="Les mots de Kreiz">
+    <p>
+      Dix termes suffisent pour se repérer dans la documentation et dans l'admin.
+    </p>
+    <dl class="mt-8 space-y-6">
+      {
+        [
+          {
+            term: 'Core',
+            def: "Le moteur Kreiz (paquet @kreiz/core) : back-office, publication, médias, formulaires, analytics, SEO. Stable, il n'a pas besoin que vous le touchiez.",
+          },
+          {
+            term: 'Project',
+            def: 'Votre site. Une application Astro qui déclare ses types de contenu et ses templates, et consomme le Core par son API publique.',
+          },
+          {
+            term: 'Back-office',
+            def: "L'endroit privé (/admin) où vous modifiez votre contenu : formulaires générés, médiathèque, boîte de contact, analytics, publications.",
+          },
+          {
+            term: 'Type de contenu',
+            def: "Une sorte de contenu déclarée en code, avec ses champs et son template : Article, Service, Projet, Réalisation, Produit, Équipe… Le formulaire admin est généré à partir de cette déclaration.",
+          },
+          {
+            term: 'Template',
+            def: "La façon dont un contenu apparaît sur le site. Le même template sert au public et à la preview de l'admin : vous ne le modifiez qu'à un endroit.",
+          },
+          {
+            term: 'Champ',
+            def: 'Une information d\u2019un type de contenu : texte, texte riche, date, sélection, liste… Le vocabulaire est borné : les formulaires admin et la validation serveur suivent la déclaration, sans surprise.',
+          },
+          {
+            term: 'Save',
+            def: "Enregistrer sans publier. Le brouillon vit en base, dans l'admin ; rien n'est public, rien ne se perd.",
+          },
+          {
+            term: 'Publish',
+            def: 'Rendre visible. La publication fige une copie du contenu — le snapshot — et demande la reconstruction du site.',
+          },
+          {
+            term: 'Snapshot',
+            def: 'La copie figée que lit le site public. Les brouillons ne peuvent jamais fuiter dans le HTML servi : le build ne lit que les snapshots publiés.',
+          },
+          {
+            term: 'Media',
+            def: "Les images du site, gérées dans la médiathèque : upload direct vers votre stockage, variantes responsives (WebP, AVIF) générées automatiquement.",
+          },
+          {
+            term: 'Form',
+            def: "Un formulaire rempli par vos visiteurs, reçu dans la boîte de contact de l'admin — et notifié par email si vous branchez un relais.",
+          },
+        ].map((entry) => (
+          <div class="border-t border-stone-200 pt-6">
+            <dt class="font-display text-xl font-medium text-ink">{entry.term}</dt>
+            <dd class="mt-2 max-w-2xl text-[0.9375rem] leading-relaxed text-stone-600">
+              {entry.def}
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+  </DocSection>
+
+  <DocSection id="save-publish" title="Enregistrer n'est pas publier">
+    <p>
+      C'est le point d'architecture qui rend Kreiz tranquille à vivre. Trois temps
+      distincts&nbsp;:
+    </p>
+    <ul>
+      <li>
+        <strong>Enregistrez</strong> — vos brouillons vivent en base, dans l'admin. Le site
+        public ne change pas.
+      </li>
+      <li>
+        <strong>Publiez</strong> — le contenu courant est validé puis figé dans un snapshot
+        immuable. Publier demande la reconstruction du site.
+      </li>
+      <li>
+        <strong>Reconstruisez</strong> — le build lit uniquement les snapshots publiés et
+        régénère le site statique. Un build raté n'endommage rien&nbsp;: la version
+        précédente reste en ligne.
+      </li>
+    </ul>
+    <p>
+      Deux conséquences concrètes&nbsp;: changer l'adresse d'une page publiée crée
+      automatiquement une redirection 301, et dépublier un contenu le fait disparaître au
+      prochain build — sans jamais casser le site servi.
+    </p>
+    <div class="mt-6">
+      <Callout variant="tip" label="La garantie">
+        <p>
+          La base est la source de vérité&nbsp;; le site statique n'en est que la
+          projection. Vous pouvez tout modifier dans l'admin sans jamais risquer le site
+          en ligne.
+        </p>
+      </Callout>
+    </div>
+  </DocSection>
+
+  <DocSection id="design" title="Le design vous appartient">
+    <p>
+      Kreiz ne décide pas du design de votre site. Aucun thème, aucune apparence
+      imposée, aucun «&nbsp;template de template&nbsp;». En pratique, la partie visible
+      de votre Project est du code Astro et Tailwind ordinaire — le vôtre.
+    </p>
+    <div class="mt-8 grid gap-5 md:grid-cols-2">
+      <div class="rounded-2xl border border-rust/40 bg-rust/5 p-7">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-rust">
+          Votre Project décide
+        </h3>
+        <ul class="doc-prose mt-5">
+          <li>Les couleurs</li>
+          <li>La typographie</li>
+          <li>Le layout et les pages</li>
+          <li>Les animations</li>
+          <li>Les composants</li>
+          <li>La navigation</li>
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-stone-300/70 bg-white p-7">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-stone-400">
+          Kreiz fournit
+        </h3>
+        <ul class="doc-prose mt-5">
+          <li>Le contenu</li>
+          <li>La publication</li>
+          <li>Les médias</li>
+          <li>Le back-office</li>
+          <li>Les analytics</li>
+          <li>Le SEO et les formulaires</li>
+        </ul>
+      </div>
+    </div>
+  </DocSection>
+
+  <DocSection id="pas-no-code" title="Kreiz n'est pas du no-code">
+    <p>
+      Kreiz est un starter <strong>code-first</strong>&nbsp;: le site est du code, et le
+      modifier demande de lire du code — sauf si vous faites lire ce code à une IA.
+      C'est le pari de Kreiz&nbsp;: un moteur stable et lisible, un Project que vous —
+      ou votre IA — modifiez librement, sans page builder ni abonnement.
+    </p>
+    <p>
+      Si vous voulez voir à quoi ressemble un site Kreiz, la démonstration
+      (<code>apps/demo</code>) est la référence&nbsp;: trois types de contenu, un
+      formulaire, une identité complète.
+    </p>
+  </DocSection>
+</DocLayout>

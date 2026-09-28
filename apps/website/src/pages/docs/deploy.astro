@@ -1,0 +1,185 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import Callout from '../../components/doc/Callout.astro';
+import StepList from '../../components/doc/StepList.astro';
+---
+
+<DocLayout
+  title="Déployer votre site — Documentation Kreiz"
+  description="Déployer un site Kreiz sur Vercel : forme du déploiement, variables de production, cycle de publication, cron de maintenance et checklist."
+  pageId="deploy"
+>
+  <DocHeader
+    kicker="Déployer"
+    title="Déployer votre site."
+    lead="Un site Kreiz se compose de deux parties : un site public prérendu, entièrement statique — et un petit serveur pour le back-office et les endpoints publics. Vercel est la cible de référence, l'adaptateur est fourni."
+  />
+
+  <DocSection id="forme" title="La forme du déploiement">
+    <p>
+      Le partage est net, et il explique tout le reste&nbsp;:
+    </p>
+    <ul>
+      <li>
+        <strong>Statique</strong> — pages publiques, <code>sitemap.xml</code>,
+        <code>robots.txt</code> et beacon analytics&nbsp;: prérendus au build, servis par
+        le CDN, sans serveur.
+      </li>
+      <li>
+        <strong>Serveur</strong> — <code>/admin/*</code> et <code>/api/*</code>&nbsp;: une
+        fonction unique couvre le back-office, la réception des formulaires et la
+        collecte analytics.
+      </li>
+    </ul>
+    <p>
+      Côté hébergeur, vous fournissez la base PostgreSQL (Neon recommandé) et,
+      optionnellement, le stockage des médias (S3, R2, MinIO) et le relais email. Le
+      reste appartient au Core.
+    </p>
+  </DocSection>
+
+  <DocSection id="variables" title="Les variables de production">
+    <p>
+      Elles se configurent dans l'hébergeur (dashboard Vercel ou CLI). Les groupes
+      optionnels sont tout-ou-rien&nbsp;: sans stockage, la médiathèque est simplement
+      indisponible&nbsp;; sans relais, les demandes restent dans l'admin.
+    </p>
+    <!-- Conteneur scrollable : la table déborde sous ~560 px de viewport. -->
+    <div class="mt-6 overflow-x-auto">
+      <table class="doc-table">
+        <thead>
+          <tr>
+            <th scope="col">Variable</th>
+            <th scope="col">À quoi elle sert</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td><code>KREIZ_DATABASE_URL</code></td>
+          <td>
+            La base PostgreSQL du site en production. Utilisée par le back-office, la CLI
+            et le build.
+          </td>
+        </tr>
+        <tr>
+          <td><code>KREIZ_SECRET</code></td>
+          <td>
+            Clé de signature (sessions, jetons de formulaire). Unique par déploiement
+            (<code>openssl rand -base64 32</code>), présente au build <strong>et</strong> au
+            runtime.
+          </td>
+        </tr>
+        <tr>
+          <td><code>KREIZ_REBUILD_DEPLOY_HOOK_URL</code></td>
+          <td>
+            Le deploy hook Vercel&nbsp;: chaque publication déclenche la reconstruction
+            du site public.
+          </td>
+        </tr>
+        <tr>
+          <td><code>KREIZ_STORAGE_*</code></td>
+          <td>
+            Optionnel — stockage S3-compatible des médias, plus
+            <code>KREIZ_STORAGE_PUBLIC_BASE_URL</code> (CDN des variantes) dès qu'une
+            image est publiée.
+          </td>
+        </tr>
+        <tr>
+          <td><code>KREIZ_MAIL_*</code></td>
+          <td>
+            Optionnel — relais email des notifications de contact. Persistance d'abord,
+            notification ensuite&nbsp;: une panne ne perd jamais une demande.
+          </td>
+        </tr>
+        <tr>
+          <td><code>KREIZ_MAINTENANCE_TOKEN</code></td>
+          <td>
+            Optionnel — autorise le cron de maintenance à appeler
+            <code>POST /api/maintenance</code>. Sans valeur, l'endpoint refuse tout.
+          </td>
+        </tr>
+      </tbody>
+      </table>
+    </div>
+    <p>
+      La référence exhaustive — chaque variable, défauts, dev vs production — est dans le
+      <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/configuration.md">
+      guide de configuration</a>.
+    </p>
+  </DocSection>
+
+  <DocSection id="cycle" title="Le cycle de publication">
+    <StepList>
+      <li>
+        <h3>Vous publiez dans l'admin</h3>
+        <p>
+          Le contenu courant est validé puis figé dans un snapshot public. Le bouton
+          «&nbsp;publier&nbsp;» appelle le deploy hook.
+        </p>
+      </li>
+      <li>
+        <h3>Le site se reconstruit</h3>
+        <p>
+          Le build lit uniquement les snapshots publiés — jamais les brouillons — et
+          régénère les pages, le sitemap et les redirections 301.
+        </p>
+      </li>
+      <li>
+        <h3>Le site servi ne bouge qu'avec un build réussi</h3>
+        <p>
+          Un build raté ne change rien en ligne&nbsp;: la version précédente reste servie,
+          la base garde tout, et vous relancez depuis l'admin.
+        </p>
+      </li>
+    </StepList>
+  </DocSection>
+
+  <DocSection id="maintenance" title="La maintenance récurrente">
+    <p>
+      Les rétentions (analytics, demandes de contact) et les récupérations (notifications
+      en attente, médias bloqués) attendent un déclencheur externe&nbsp;: un appel du cron
+      à <code>POST /api/maintenance</code> toutes les 30 minutes environ, authentifié par
+      <code>KREIZ_MAINTENANCE_TOKEN</code>. Une GitHub Action planifiée ou n'importe quel
+      planificateur capable d'un POST authentifié suffit.
+    </p>
+    <p>
+      Le tableau complet des récupérations et leurs fréquences sont dans le
+      <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/operations.md">
+      guide d'exploitation</a>.
+    </p>
+  </DocSection>
+
+  <DocSection id="checklist" title="Checklist avant mise en ligne">
+    <ul>
+      <li>Base PostgreSQL dédiée à la production</li>
+      <li><code>KREIZ_SECRET</code> unique, présent au build et au runtime</li>
+      <li>Deploy hook branché — sinon les publications ne reconstruisent pas le site</li>
+      <li>Stockage branché si vous publiez des médias</li>
+      <li>Relais email branché si vos formulaires doivent notifier</li>
+      <li>Cron de maintenance en place</li>
+      <li>Premier administrateur créé, mot de passe robuste</li>
+      <li>Base canonique SEO déclarée — le Core n'invente jamais une URL</li>
+    </ul>
+    <div class="mt-6 grid gap-5 md:grid-cols-2">
+      <Callout label="Mise en production">
+        <p>
+          Kreiz peut servir de base réelle — mais la production demande de configurer
+          l'environnement correctement. Les conditions restantes sont listées dans la page
+          <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/production-readiness.md">
+          Production readiness</a> du dépôt.
+        </p>
+      </Callout>
+      <Callout label="En cas d'incident">
+        <p>
+          La base est la source de vérité&nbsp;: la base et le dépôt suffisent à
+          reconstruire le site public intégralement. Les signaux à surveiller et la
+          table de recovery sont documentés dans le
+          <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/operations.md">
+          guide d'exploitation</a>.
+        </p>
+      </Callout>
+    </div>
+  </DocSection>
+</DocLayout>

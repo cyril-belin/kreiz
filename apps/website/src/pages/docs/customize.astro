@@ -1,0 +1,206 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import Callout from '../../components/doc/Callout.astro';
+import CodeBlock from '../../components/doc/CodeBlock.astro';
+import { siteUrl } from '../../lib/urls';
+---
+
+<DocLayout
+  title="Personnaliser votre site — Documentation Kreiz"
+  description="Modifier le style, changer les composants, créer une page, ajouter un type de contenu, modifier les champs, ajouter un formulaire : tout vit dans votre Project."
+  pageId="customize"
+>
+  <DocHeader
+    kicker="Personnaliser"
+    title="Personnaliser votre site."
+    lead="Tout ce qui se voit vit dans votre Project — du code ordinaire, à vous. Chaque changement de cette page peut se faire à la main, ou se demander à votre IA en une phrase."
+  />
+
+  <DocSection id="style" title="Modifier le style">
+    <p>
+      L'identité visuelle tient dans quelques tokens au début de
+      <code>src/styles/global.css</code>&nbsp;: couleurs, police de titres. La
+      démonstration part d'une identité «&nbsp;papier&nbsp;» (fond crème, encre profonde,
+      accent rouille, serif Fraunces) — remplacez-la par la vôtre, ou demandez à votre IA
+      une direction&nbsp;: <em>«&nbsp;Propose-moi une palette chaude pour un restaurant
+      de quartier.&nbsp;»</em>
+    </p>
+    <p>
+      Le reste est du Tailwind ordinaire dans vos composants et vos pages — vous
+      gardez le layout, le Core n'en sait rien.
+    </p>
+  </DocSection>
+
+  <DocSection id="composants" title="Changer les composants">
+    <p>
+      Vos composants vivent dans le Project (<code>src/components/</code>,
+      <code>src/templates/</code>). Règle d'or&nbsp;: le même template sert au site
+      public et à la preview du back-office. Vous modifiez un seul fichier, les deux
+      suivent — impossible de désynchroniser la preview et le site.
+    </p>
+    <p>
+      La démonstration en fournit la preuve&nbsp;: ses templates
+      (<code>ArticleContent.astro</code>, <code>CoverPicture.astro</code>…) sont à la
+      fois ses pages publiques et la preview admin. Copiez-les comme point de départ.
+    </p>
+  </DocSection>
+
+  <DocSection id="page" title="Créer une nouvelle page">
+    <p>
+      Une page est un fichier dans <code>src/pages/</code>, comme dans tout projet
+      Astro. Une page vitrée <code>prerender = true</code> est générée en statique au
+      build — c'est le mode par défaut du site public.
+    </p>
+    <CodeBlock
+      lang="astro"
+      copy
+      title="src/pages/a-propos.astro"
+      code={`---
+export const prerender = true;
+---
+<!-- structure libre : votre HTML, votre style -->`}
+    />
+    <p>
+      Une page peut aussi afficher des contenus publiés — c'est exactement ce que font
+      les pages de type <code>[slug].astro</code> de la démonstration, avec
+      <code>getStaticPaths</code> et <code>createContentReader</code>. Copiez-en une et
+      adaptez-la&nbsp;; le <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md">
+      guide développeur</a> montre le modèle complet.
+    </p>
+  </DocSection>
+
+  <DocSection id="type-contenu" title="Ajouter un type de contenu">
+    <p>
+      Un type de contenu se déclare en code&nbsp;: sa clé, ses libellés, son espace de
+      routes, ses champs et son template. Le formulaire admin, la validation serveur et
+      la preview naissent de cette seule déclaration.
+    </p>
+    <CodeBlock
+      lang="ts"
+      copy
+      title="src/content-types/realisation.ts"
+      code={`import { defineContentType, fields } from '@kreiz/core/content';
+
+export const realisationType = defineContentType({
+  key: 'realisation',
+  label: 'Réalisation',
+  labelPlural: 'Réalisations',
+  routeNamespace: 'realisations',     // → /realisations/<slug>
+  fields: {
+    shortDescription: fields.text({
+      label: 'Description courte', required: true, maxLength: 300,
+    }),
+    category: fields.select({
+      label: 'Catégorie', required: true,
+      choices: [
+        { value: 'site-vitrine', label: 'Site vitrine' },
+        { value: 'e-commerce', label: 'E-commerce' },
+      ],
+    }),
+  },
+  template: 'src/templates/RealisationContent.astro',
+});`}
+    />
+    <p>Trois mouvements, rien de plus&nbsp;:</p>
+    <ul>
+      <li>déclarer le fichier <code>src/content-types/realisation.ts</code>&nbsp;;</li>
+      <li>
+        l'ajouter à la liste <code>kreiz({'{'} content: {'{'} types: [...] {'}'} {'}'})</code>
+        dans <code>astro.config.ts</code>&nbsp;;
+      </li>
+      <li>
+        créer la page de route qui prérend les contenus publiés — copiez
+        <code>src/pages/realisations/[slug].astro</code> de la démonstration, qui
+        contient déjà un type <em>Réalisation</em> complet à imiter.
+      </li>
+    </ul>
+  </DocSection>
+
+  <DocSection id="champs" title="Modifier les champs">
+    <p>
+      Ajouter, retirer ou ajuster un champ se fait dans la déclaration du type. Les
+      formulaires admin et la validation serveur suivent automatiquement — vous ne
+      touchez qu'à un endroit. Le vocabulaire V1 est borné, volontairement&nbsp;:
+    </p>
+    <ul>
+      <li><code>text</code>, <code>textarea</code> — ligne courte, texte long</li>
+      <li><code>select</code> — choix fermé, déclaré en code</li>
+      <li><code>url</code>, <code>date</code> — liens et dates typés</li>
+      <li><code>metric</code>, <code>list</code> — chiffre clé, liste d'éléments</li>
+      <li><code>richText</code> — l'éditeur riche (titres, listes, citations, images)</li>
+    </ul>
+    <p>
+      Vouloir un champ hors vocabulaire est le signal qu'il faut en parler avant de
+      coder — votre IA saura dire si un type existant suffit.
+    </p>
+  </DocSection>
+
+  <DocSection id="formulaire" title="Ajouter un formulaire">
+    <p>
+      Un formulaire de contact se déclare comme un type de contenu&nbsp;: champs,
+      page de confirmation, destinataires de la notification. L'endpoint de soumission,
+      l'anti-spam en couches et la boîte de réception dans l'admin sont fournis par le
+      Core — la page publique fonctionne même sans JavaScript.
+    </p>
+    <CodeBlock
+      lang="ts"
+      copy
+      title="src/forms/devis.ts"
+      code={`import { defineContactForm, formFields } from '@kreiz/core/forms';
+
+export const devisForm = defineContactForm({
+  key: 'devis',
+  label: 'Demande de devis',
+  confirmationPath: '/devis/merci',
+  fields: {
+    name: formFields.text({ label: 'Nom', required: true }),
+    email: formFields.email({ label: 'Email', required: true }),
+    message: formFields.textarea({ label: 'Votre projet', required: true }),
+  },
+  notification: {
+    recipients: ['bonjour@mon-site.fr'],
+    subject: 'Nouvelle demande de devis',
+  },
+});`}
+    />
+    <p>
+      Déclarez-le ensuite dans <code>kreiz({'{'} forms: [...] {'}'})</code> et rendez-le
+      dans une page avec <code>renderContactFormHtml</code> — le modèle complet est dans
+      <code>apps/demo/src/forms/contact.ts</code>. Sans relais email branché, les demandes
+      restent visibles dans la boîte de contact de l'admin&nbsp;; rien ne se perd.
+    </p>
+  </DocSection>
+
+  <DocSection id="medias-seo" title="Médias, SEO, analytics : la mécanique est fournie">
+    <p>
+      Le Core fournit la mécanique&nbsp;; le Project la configure et l'intègre à son
+      rendu. Concrètement&nbsp;:
+    </p>
+    <p>
+      <strong>Médias</strong>&nbsp;: la médiathèque (<code>/admin/media</code>) gère
+      l'upload, les variantes responsives et l'insertion dans l'éditeur riche. Vous
+      intégrez les images dans vos templates avec des vues prêtes pour un
+      <code>&lt;picture&gt;</code>.
+    </p>
+    <p>
+      <strong>SEO</strong>&nbsp;: déclarez une fois votre base canonique
+      (<code>defineSeoSiteConfig</code>), le Core résout titres, canonical, Open Graph,
+      JSON-LD, sitemap et robots.
+    </p>
+    <p>
+      <strong>Analytics</strong>&nbsp;: insérez le beacon dans vos pages publiques&nbsp;;
+      collecte privacy-first, dashboard et rétention sont inclus.
+    </p>
+    <div class="mt-6">
+      <Callout variant="tip" label="Vous préférez déléguer ?">
+        <p>
+          Chacun de ces changements se demande en une phrase à votre IA —
+          <a href={siteUrl('/docs/ai/')}>Kreiz et l'IA</a> vous donne le prompt maître et
+          des exemples de demandes.
+        </p>
+      </Callout>
+    </div>
+  </DocSection>
+</DocLayout>

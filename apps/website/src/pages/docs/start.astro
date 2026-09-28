@@ -1,0 +1,224 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import DocHeader from '../../components/doc/DocHeader.astro';
+import DocSection from '../../components/doc/DocSection.astro';
+import StepList from '../../components/doc/StepList.astro';
+import Callout from '../../components/doc/Callout.astro';
+import CodeBlock from '../../components/doc/CodeBlock.astro';
+import { siteUrl } from '../../lib/urls';
+---
+
+<DocLayout
+  title="Créer votre premier site — Documentation Kreiz"
+  description="Dix étapes pour créer un site avec Kreiz : template GitHub, application, contenu, back-office, publication et déploiement."
+  pageId="start"
+>
+  <DocHeader
+    kicker="Commencer"
+    title="Créer votre premier site."
+    lead="Dix étapes, du template GitHub à votre premier contenu publié. Chaque étape peut se faire à la main ou se déléguer à votre IA — le parcours est le même."
+  />
+
+  <div class="mt-10">
+    <Callout label="Ce qu'il faut avant de commencer">
+      <ul>
+        <li>un compte GitHub&nbsp;;</li>
+        <li>Node 24 et pnpm installés&nbsp;;</li>
+        <li>une base PostgreSQL — <a href="https://neon.com">Neon</a> propose une offre gratuite adaptée&nbsp;;</li>
+        <li>si vous vous faites assister, un assistant IA ayant accès au dossier du projet&nbsp;;</li>
+        <li>un hébergement pour déployer ensuite (Vercel est la cible de référence).</li>
+      </ul>
+      <p>
+        Tout le reste — stockage des médias, relais email — est optionnel et se branche
+        plus tard.
+      </p>
+    </Callout>
+  </div>
+
+  <div class="mt-12">
+    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">Qui fait quoi</p>
+    <div class="mt-4 grid gap-5 md:grid-cols-3">
+      <div class="rounded-2xl border border-stone-300/70 bg-white p-6">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-stone-400">Vous</h3>
+        <ul class="doc-prose mt-4">
+          <li>Décrivez ce que vous voulez</li>
+          <li>Validez les choix</li>
+          <li>Fournissez comptes, contenus et secrets nécessaires</li>
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-rust/40 bg-rust/5 p-6">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-rust">Votre IA</h3>
+        <ul class="doc-prose mt-4">
+          <li>Modifie le Project</li>
+          <li>Crée les pages</li>
+          <li>Ajoute les types de contenu</li>
+          <li>Adapte le frontend</li>
+          <li>Lance les vérifications</li>
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-stone-300/70 bg-white p-6">
+        <h3 class="text-sm font-semibold uppercase tracking-widest text-stone-400">Kreiz</h3>
+        <ul class="doc-prose mt-4">
+          <li>Fournit le moteur éditorial et le back-office</li>
+          <li>Gère Save / Publish</li>
+          <li>Traite médias, formulaires, analytics, SEO</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <StepList>
+    <li>
+      <h3>Partez du template Kreiz</h3>
+      <p>
+        Sur GitHub, ouvrez <code>cyril-belin/kreiz</code> et cliquez
+        <strong>«&nbsp;Use this template&nbsp;»</strong>. Vous obtenez votre propre copie du
+        dépôt&nbsp;: c'est votre site. Kreiz ne s'installe pas depuis npm — le starter
+        entier (moteur + site de démonstration) devient votre point de départ.
+      </p>
+    </li>
+    <li>
+      <h3>Ouvrez le projet dans votre outil</h3>
+      <p>
+        À la main&nbsp;: votre éditeur habituel. Assisté par IA&nbsp;: un agent qui lit et
+        modifie le dossier du projet — Codex, Claude Code, Cursor, Windsurf… — ouvre ce
+        dépôt tel quel. La page
+        <a href={siteUrl('/docs/ai/')}>Kreiz et l'IA</a> vous donne le prompt maître pour
+        cadrer la session dès le départ.
+      </p>
+    </li>
+    <li>
+      <h3>Installez les dépendances</h3>
+      <p>
+        Deux commandes à la racine. Le build compile d'abord le moteur, puis le site de
+        démonstration&nbsp;: si tout passe, votre environnement est prêt.
+      </p>
+      <CodeBlock
+        lang="sh"
+        copy
+        title="À la racine du dépôt"
+        code={`pnpm install
+pnpm build`}
+      />
+    </li>
+    <li>
+      <h3>Créez votre application</h3>
+      <p>
+        Le site visible vit dans une application sous <code>apps/</code>. Le plus court
+        chemin&nbsp;: partir de la démonstration — <code>apps/demo</code> est un site
+        complet et fonctionnel — et l'adapter. Copiez-la, renommez son paquet dans
+        <code>package.json</code>, puis réinstallez.
+      </p>
+      <CodeBlock
+        lang="sh"
+        copy
+        title="La démonstration devient votre site"
+        code={`cp -R apps/demo apps/mon-site
+rm -rf apps/mon-site/node_modules apps/mon-site/dist apps/mon-site/.astro
+pnpm install`}
+      />
+      <p>
+        Quelques scripts du dépôt ciblent <code>@kreiz/demo</code> — renommez-les pour
+        votre application. Le détail exact est dans le
+        <a href="https://github.com/cyril-belin/kreiz/blob/main/docs/build-a-project.md">
+          guide développeur</a>.
+      </p>
+    </li>
+    <li>
+      <h3>Décrivez le site que vous voulez</h3>
+      <p>
+        Pages, types de contenu, ton, style&nbsp;: c'est le moment de dire ce que vous
+        voulez. Écrivez le code vous-même — ou décrivez-le à votre IA dans une phrase
+        simple&nbsp;: <em>«&nbsp;Crée un site pour un garage automobile avec Accueil,
+        Services, Véhicules, À propos, Contact.&nbsp;»</em> Le
+        <a href={siteUrl('/docs/ai/')}>prompt maître</a> lui donne le cadre Kreiz.
+      </p>
+    </li>
+    <li>
+      <h3>Lancez le site en local</h3>
+      <p>
+        Copiez <code>apps/mon-site/.env.example</code> en <code>.env</code> et renseignez
+        deux valeurs&nbsp;: votre base (<code>KREIZ_DATABASE_URL</code>) et une clé secrète
+        (<code>KREIZ_SECRET</code>). Appliquez les migrations, puis lancez le serveur.
+      </p>
+      <CodeBlock
+        lang="sh"
+        copy
+        title="Migrations puis serveur de dev"
+        code={`pnpm --filter @kreiz/mon-site db:migrate
+pnpm --filter @kreiz/mon-site dev`}
+      />
+      <p>
+        Le site tourne sur <code>http://127.0.0.1:4321</code>. Les
+        <a href={siteUrl('/docs/deploy/')}>variables détaillées</a> sont documentées page
+        Déployer.
+      </p>
+    </li>
+    <li>
+      <h3>Entrez dans le back-office</h3>
+      <p>
+        Créez d'abord votre compte administrateur avec la CLI Kreiz (elle lit
+        <code>KREIZ_DATABASE_URL</code>&nbsp;; si votre shell ne charge pas le
+        <code>.env</code>, exportez-la d'abord), puis ouvrez <code>/admin</code> et
+        connectez-vous.
+      </p>
+      <CodeBlock
+        lang="sh"
+        copy
+        title="Premier administrateur"
+        code={`pnpm --filter @kreiz/mon-site exec kreiz admin:create`}
+      />
+      <p>
+        Le back-office est privé et fourni par le Core&nbsp;: contenus, médiathèque,
+        formulaires reçus, analytics. Vous ne l'écrivez pas — vous créez votre compte,
+        puis vous l'adaptez par la configuration.
+      </p>
+    </li>
+    <li>
+      <h3>Créez du contenu</h3>
+      <p>
+        Un type de contenu devient un formulaire dans l'admin. Remplissez les champs,
+        ajoutez une image de la médiathèque, prévisualisez avec vos vrais
+        templates&nbsp;— et <strong>enregistrez</strong> autant de fois que vous voulez&nbsp;:
+        un brouillon n'est pas public.
+      </p>
+    </li>
+    <li>
+      <h3>Publiez</h3>
+      <p>
+        Publier fige une copie publique du contenu et demande la reconstruction du site.
+        Votre page apparaît au prochain build — et changer son adresse crée
+        automatiquement une redirection. C'est la règle d'or de Kreiz&nbsp;:
+        <a href={siteUrl('/docs/concepts/')}>enregistrer n'est jamais publier</a>.
+      </p>
+    </li>
+    <li>
+      <h3>Déployez</h3>
+      <p>
+        Vercel est la cible de référence&nbsp;: le site public est prérendu en statique,
+        le back-office tourne sur une petite fonction serveur, et un deploy hook
+        reconstruit le site à chaque publication. La page
+        <a href={siteUrl('/docs/deploy/')}>Déployer</a> donne les variables et le cycle
+        complet.
+      </p>
+    </li>
+  </StepList>
+
+  <div class="mt-12">
+    <Callout variant="tip" label="À chaque étape">
+      <p>
+        Vous pouvez demander à votre IA de faire le travail — création d'application,
+        types de contenu, pages, style. Le <a href={siteUrl('/docs/ai/')}>prompt maître</a>
+        lui fixe les limites&nbsp;: ne pas toucher au Core, respecter Save ≠ Publish.
+      </p>
+    </Callout>
+  </div>
+
+  <DocSection id="suivant" title="Et après ?">
+    <ul>
+      <li><a href={siteUrl('/docs/concepts/')}>Comprendre Kreiz</a> — dix minutes pour savoir exactement qui décide quoi.</li>
+      <li><a href={siteUrl('/docs/customize/')}>Personnaliser votre site</a> — style, composants, types de contenu, formulaires.</li>
+      <li><a href={siteUrl('/docs/deploy/')}>Déployer</a> — mise en ligne et cycle de publication.</li>
+    </ul>
+  </DocSection>
+</DocLayout>

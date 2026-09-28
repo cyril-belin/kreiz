@@ -1,0 +1,49 @@
+---
+/**
+ * Texte prêt à copier (prompt maître, exemples de demandes IA) dans une
+ * carte fine avec bouton « Copier ». Variante `quote` : rendu éditorial en
+ * serif italique ; la chaîne copiée est le texte brut, sans les guillemets.
+ */
+interface Props {
+  id: string;
+  text: string;
+  title?: string;
+  buttonLabel?: string;
+  variant?: 'block' | 'quote';
+}
+
+const { id, text, title, buttonLabel = 'Copier', variant = 'block' } = Astro.props;
+---
+
+<div class="mt-6 overflow-hidden rounded-2xl border border-stone-300/70 bg-white">
+  {
+    title && (
+      <p class="border-b border-stone-200 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
+        {title}
+      </p>
+    )
+  }
+  <div class="px-6 py-5">
+    {
+      variant === 'block' ? (
+        <pre
+          id={id}
+          class="doc-prompt-text whitespace-pre-wrap font-sans text-sm leading-relaxed text-stone-700"
+        >{text}</pre>
+      ) : (
+        <p class="font-display text-lg italic leading-snug text-stone-800">
+          «&nbsp;<span id={id}>{text}</span>&nbsp;»
+        </p>
+      )
+    }
+  </div>
+  <div class="flex justify-end border-t border-stone-200 px-5 py-3">
+    <button
+      type="button"
+      data-copy-target={id}
+      class="rounded-full border border-stone-400 px-4 py-1.5 text-xs font-medium transition-colors hover:border-ink"
+    >
+      <span data-copy-label aria-live="polite">{buttonLabel}</span>
+    </button>
+  </div>
+</div>
