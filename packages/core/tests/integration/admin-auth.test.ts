@@ -54,7 +54,17 @@ describeIntegration('auth admin — service complet sur Neon', () => {
     await withTransientNetworkRetry(() =>
       harness.raw(sql`delete from kreiz_admin_users where email like ${`${emailPrefix}%`}`),
     );
-    await withTransientNetworkRetry(() => harness.raw(sql`delete from kreiz_rate_limits`));
+    // Nettoyage borné aux clés créées par CE fichier : les fichiers
+    // d'intégration courent en parallèle sur la même base — un delete non
+    // borné de la table effacerait les compteurs `contact:`/`analytics:`
+    // d'autres fichiers entre leur incrément et leur assertion (course
+    // observée en CI sur contact.test.ts). Préfixes possédés ici :
+    // `kreiz:login:v1:` (auth.login) et `it2-` (tests directs du dépôt).
+    await withTransientNetworkRetry(() =>
+      harness.raw(
+        sql`delete from kreiz_rate_limits where key like 'kreiz:login:v1:%' or key like 'it2-%'`,
+      ),
+    );
     await harness.close();
   }, 60_000);
 
